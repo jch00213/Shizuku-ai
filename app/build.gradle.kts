@@ -78,8 +78,8 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
 
-    // LiteRT / MediaPipe LLM Inference Engine
-    implementation(libs.mediapipe.tasks.genai)
+    // Replace MediaPipe GenAI with LiteRT-LM SDK
+    implementation(libs.litertlm.android) // Or implementation("com.google.ai.edge.litertlm:litertlm-android:0.17.0")
 
     // Shizuku API & Provider
     implementation(libs.shizuku.api)
