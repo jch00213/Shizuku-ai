@@ -1,10 +1,11 @@
 package com.jeremy.shizukuai;
 
 import com.google.ai.edge.litertlm.Engine;
+import com.google.ai.edge.litertlm.EngineConfig;
 
 public class LiteRtBridge {
-    // Wrap engine initialization or call sites here
     public static Engine createEngine(String modelPath) {
-        return new Engine(modelPath);
+        EngineConfig config = new EngineConfig(modelPath);
+        return new Engine(config);
     }
 }
