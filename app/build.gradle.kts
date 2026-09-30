@@ -18,9 +18,22 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("release") {
+            val keystoreFile = file("release.keystore")
+            if (keystoreFile.exists()) {
+                storeFile = keystoreFile
+                storePassword = System.getenv("RELEASE_STORE_PASSWORD")
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS")
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -43,7 +56,7 @@ android {
         buildConfig = true
     }
 
-    // Required for LiteRT native JNI libraries (.so)
+    // Required for LiteRT / MediaPipe native JNI libraries (.so)
     packaging {
         jniLibs {
             useLegacyPackaging = true
@@ -65,8 +78,8 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
 
-    // LiteRT-LM On-Device GenAI Engine
-    implementation("com.google.ai.edge.litertlm:litertlm-android:latest.release")
+    // LiteRT / MediaPipe LLM Inference Engine
+    implementation(libs.mediapipe.tasks.genai)
 
     // Shizuku API & Provider
     implementation(libs.shizuku.api)
