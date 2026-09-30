@@ -4,80 +4,108 @@ import android.content.ComponentName
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.os.IBinder
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import rikka.shizuku.Shizuku
 
-class ShizukuManager(
-    private val onServiceConnected: (IRemoteAiService) -> Unit,
-    private val onServiceDisconnected: () -> Unit
-) {
+object ShizukuManager {
 
-    var remoteService: IRemoteAiService? = null
-        private set
+    private const val REQUEST_CODE = 2000
 
-    private val REQUEST_CODE = 1001
+    private val _remoteService = MutableStateFlow<IRemoteAiService?>(null)
+    val remoteService: StateFlow<IRemoteAiService?> = _remoteService
+
+    private val _isPermissionGranted = MutableStateFlow(false)
+    val isPermissionGranted: StateFlow<Boolean> = _isPermissionGranted
+
+    private val _isShizukuAvailable = MutableStateFlow(false)
+    val isShizukuAvailable: StateFlow<Boolean> = _isShizukuAvailable
 
     private val serviceArgs = Shizuku.UserServiceArgs(
-        ComponentName(BuildConfig.APPLICATION_ID, RemoteAiService::javaClass.name)
+        ComponentName(BuildConfig.APPLICATION_ID, RemoteAiService::class.java.name)
     )
-        .processNameSuffix("ai_service")
+        .tag("privileged_ai_service")
+        .processNameSuffix("privileged_ai")
         .debuggable(BuildConfig.DEBUG)
-        .version(BuildConfig.VERSION_CODE)
+        .version(1)
 
-    private val connection = object : ServiceConnection {
-        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
-            if (binder != null && binder.pingBinder()) {
-                remoteService = IRemoteAiService.Stub.asInterface(binder)
-                remoteService?.let { onServiceConnected(it) }
+    private val binderReceivedListener = Shizuku.OnBinderReceivedListener {
+        _isShizukuAvailable.value = true
+        checkPermission()
+    }
+
+    private val binderDeadListener = Shizuku.OnBinderDeadListener {
+        _isShizukuAvailable.value = false
+        _remoteService.value = null
+        _isPermissionGranted.value = false
+    }
+
+    private val requestPermissionResultListener = Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
+        if (requestCode == REQUEST_CODE) {
+            val granted = grantResult == PackageManager.PERMISSION_GRANTED
+            _isPermissionGranted.value = granted
+            if (granted) {
+                bindUserService()
+            }
+        }
+    }
+
+    private val serviceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+            if (service != null && service.pingBinder()) {
+                _remoteService.value = IRemoteAiService.Stub.asInterface(service)
             }
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
-            remoteService = null
-            onServiceDisconnected()
+            _remoteService.value = null
         }
     }
 
-    private val permissionListener = Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
-        if (requestCode == REQUEST_CODE && grantResult == PackageManager.PERMISSION_GRANTED) {
-            bindService()
+    fun init() {
+        Shizuku.addBinderReceivedListenerSticky(binderReceivedListener)
+        Shizuku.addBinderDeadListener(binderDeadListener)
+        Shizuku.addRequestPermissionResultListener(requestPermissionResultListener)
+
+        if (Shizuku.pingBinder()) {
+            _isShizukuAvailable.value = true
+            checkPermission()
         }
     }
 
-    fun registerListeners() {
-        Shizuku.addRequestPermissionResultListener(permissionListener)
-    }
-
-    fun unregisterListeners() {
-        Shizuku.removeRequestPermissionResultListener(permissionListener)
-    }
-
-    fun isShizukuAvailable(): Boolean {
-        return try {
-            Shizuku.pingBinder()
-        } catch (e: Exception) {
-            false
+    fun checkPermission() {
+        if (!Shizuku.pingBinder()) {
+            _isShizukuAvailable.value = false
+            return
         }
-    }
-
-    fun checkAndBind() {
-        if (!isShizukuAvailable()) return
 
         if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
-            bindService()
+            _isPermissionGranted.value = true
+            bindUserService()
         } else {
             Shizuku.requestPermission(REQUEST_CODE)
         }
     }
 
-    private fun bindService() {
-        if (Shizuku.getVersion() >= 10) {
-            Shizuku.bindUserService(serviceArgs, connection)
+    fun bindUserService() {
+        try {
+            Shizuku.bindUserService(serviceArgs, serviceConnection)
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
-    fun unbindService() {
-        if (isShizukuAvailable() && Shizuku.getVersion() >= 10) {
-            Shizuku.unbindUserService(serviceArgs, connection, true)
+    fun unbindUserService() {
+        try {
+            Shizuku.unbindUserService(serviceArgs, serviceConnection, true)
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
+    }
+
+    fun destroy() {
+        Shizuku.removeBinderReceivedListener(binderReceivedListener)
+        Shizuku.removeBinderDeadListener(binderDeadListener)
+        Shizuku.removeRequestPermissionResultListener(requestPermissionResultListener)
     }
 }
