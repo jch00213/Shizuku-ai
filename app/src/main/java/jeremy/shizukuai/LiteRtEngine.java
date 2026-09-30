@@ -1,14 +1,9 @@
 package com.jeremy.shizukuai;
 
 import android.content.Context;
-import com.google.ai.edge.litertlm.Conversation;
 import com.google.ai.edge.litertlm.Engine;
 import com.google.ai.edge.litertlm.EngineConfig;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import kotlinx.coroutines.BuildersKt;
-import kotlinx.coroutines.Dispatchers;
-import kotlin.coroutines.Continuation;
+import com.google.ai.edge.litertlm.Conversation;
 
 public class LiteRtEngine implements AutoCloseable {
 
@@ -20,48 +15,39 @@ public class LiteRtEngine implements AutoCloseable {
         this.conversation = conversation;
     }
 
-    public static Object create(Context context, String modelPath, Continuation<? super LiteRtEngine> completion) {
-        return BuildersKt.withContext(Dispatchers.getIO(), (scope, continuation) -> {
-            EngineConfig config = new EngineConfig(
-                modelPath,
-                512,  // maxTokens
-                0.2f  // temperature
-            );
+    public static LiteRtEngine create(Context context, String modelPath) {
+        EngineConfig config = EngineConfig.builder()
+                .setModelPath(modelPath)
+                .setMaxTokens(512)
+                .setTemperature(0.2f)
+                .build();
 
-            Engine engine = new Engine(config);
-            engine.initialize();
-            Conversation conversation = engine.createConversation();
-
-            return new LiteRtEngine(engine, conversation);
-        }, completion);
+        Engine engine = Engine.create(context, config);
+        Conversation conversation = engine.createConversation();
+        return new LiteRtEngine(engine, conversation);
     }
 
-    public Object generateCommand(String userPrompt, Continuation<? super String> completion) {
-        return BuildersKt.withContext(Dispatchers.getDefault(), (scope, continuation) -> {
-            String systemContext = "You are ShizukuAI, an assistant running on Android.\n" +
-                "Generate a raw bash/adb shell command to answer the request.\n" +
-                "Wrap the command inside a ```bash ... ``` code block.\n" +
-                "Do not prepend 'adb shell'.";
+    public String generateCommand(String prompt) {
+        try {
+            // Send prompt to LiteRT-LM conversation
+            String systemPrompt = "You are an Android shell command agent. " +
+                    "Convert the user intent into a single raw shell command. " +
+                    "Return ONLY the executable command, no markdown, no explanation.\n" +
+                    "User Request: " + prompt;
 
-            String fullPrompt = systemContext + "\n\nUser: " + userPrompt + "\nAssistant:";
-
-            try {
-                String rawResponse = conversation.sendMessage(fullPrompt);
-                String extracted = extractCommand(rawResponse);
-                return extracted != null ? extracted : rawResponse;
-            } catch (Exception e) {
-                return "Error executing LiteRT inference: " + e.getLocalizedMessage();
-            }
-        }, completion);
-    }
-
-    private static String extractCommand(String text) {
-        Pattern pattern = Pattern.compile("```(?:bash|sh)?\\s*([\\s\\S]*?)\\s*```");
-        Matcher matcher = pattern.matcher(text);
-        if (matcher.find()) {
-            return matcher.group(1).trim();
+            String response = conversation.sendMessage(systemPrompt);
+            return cleanOutput(response);
+        } catch (Exception e) {
+            return "echo Error: " + e.getLocalizedMessage();
         }
-        return null;
+    }
+
+    private String cleanOutput(String rawResponse) {
+        if (rawResponse == null) return "";
+        return rawResponse.trim()
+                .replaceAll("^```[a-zA-Z]*", "")
+                .replaceAll("```$", "")
+                .trim();
     }
 
     @Override
