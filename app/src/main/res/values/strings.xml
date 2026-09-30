@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Jeremy AI</string>
+    <string name="shizuku_not_available">Shizuku is not running or available</string>
+    <string name="shizuku_permission_denied">Shizuku permission denied</string>
+    <string name="shizuku_connected">Shizuku connected (UID 2000)</string>
+</resources>
