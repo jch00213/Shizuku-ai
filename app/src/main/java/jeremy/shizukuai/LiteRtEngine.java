@@ -1,9 +1,12 @@
 package com.jeremy.shizukuai;
 
 import android.content.Context;
+import com.google.ai.edge.litertlm.Backend;
 import com.google.ai.edge.litertlm.Conversation;
+import com.google.ai.edge.litertlm.ConversationConfig;
 import com.google.ai.edge.litertlm.Engine;
 import com.google.ai.edge.litertlm.EngineConfig;
+import com.google.ai.edge.litertlm.Message;
 
 public class LiteRtEngine implements AutoCloseable {
 
@@ -14,20 +17,33 @@ public class LiteRtEngine implements AutoCloseable {
     }
 
     public static LiteRtEngine create(Context context, String modelPath) {
-        EngineConfig config = new EngineConfig(modelPath);
+        EngineConfig config = new EngineConfig(
+                modelPath,
+                Backend.CPU,
+                null,
+                null,
+                null,
+                null,
+                null
+        );
         Engine engine = new Engine(config);
         engine.initialize();
         return new LiteRtEngine(engine);
     }
 
     public String generateCommand(String prompt) {
-        try (Conversation conversation = engine.createConversation()) {
+        // Construct basic conversation config
+        ConversationConfig conversationConfig = new ConversationConfig();
+
+        try (Conversation conversation = engine.createConversation(conversationConfig)) {
             String fullPrompt = "You are an Android shell command agent. " +
                     "Convert the user intent into a single raw shell command. " +
                     "Return ONLY the executable command, no markdown, no explanation.\n" +
                     "User Request: " + prompt;
 
-            String responseText = conversation.sendMessage(fullPrompt);
+            Message responseMessage = conversation.sendMessage(fullPrompt);
+            String responseText = (responseMessage != null) ? responseMessage.getText() : "";
+
             return cleanOutput(responseText);
         } catch (Exception e) {
             return "echo Error: " + e.getLocalizedMessage();
