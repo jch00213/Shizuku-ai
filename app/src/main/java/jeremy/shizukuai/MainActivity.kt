@@ -1,4 +1,5 @@
 package com.jeremy.shizukuai
+
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -10,11 +11,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import com.google.ai.edge.litertlm.Engine
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
 class MainActivity : ComponentActivity() {
 
@@ -42,12 +47,45 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AiAgentDashboard() {
+    val context = LocalContext.current
     val remoteService by ShizukuManager.remoteService.collectAsState()
     val isGranted by ShizukuManager.isPermissionGranted.collectAsState()
 
     var consoleOutput by remember { mutableStateOf("// System Console Ready\n") }
-    var commandInput by remember { mutableStateOf("") }
+    var promptInput by remember { mutableStateOf("") }
+    var isProcessing by remember { mutableStateOf(false) }
+    var isModelReady by remember { mutableStateOf(false) }
+    var liteRtEngine by remember { mutableStateOf<Engine?>(null) }
+
     val scope = rememberCoroutineScope()
+
+    // Load LiteRT-LM Model on launch
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            val modelFile = File(context.getExternalFilesDir(null), "gemma-3n-E2B-it-int4.bin")
+            if (modelFile.exists()) {
+                try {
+                    withContext(Dispatchers.Main) {
+                        consoleOutput += "[LiteRT]: Loading model ${modelFile.name} onto GPU...\n"
+                    }
+                    val engine = Engine.create(modelFile.absolutePath)
+                    liteRtEngine = engine
+                    isModelReady = true
+                    withContext(Dispatchers.Main) {
+                        consoleOutput += "[LiteRT]: Local LLM Ready!\n"
+                    }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) {
+                        consoleOutput += "[LiteRT Error]: ${e.localizedMessage}\n"
+                    }
+                }
+            } else {
+                withContext(Dispatchers.Main) {
+                    consoleOutput += "[LiteRT]: Model file missing at:\n${modelFile.absolutePath}\n(Falling back to direct shell input)\n"
+                }
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -93,7 +131,7 @@ fun AiAgentDashboard() {
                         }
                     },
                     modifier = Modifier.weight(1f),
-                    enabled = remoteService != null
+                    enabled = remoteService != null && !isProcessing
                 ) {
                     Text("Dump UI Tree")
                 }
@@ -108,37 +146,84 @@ fun AiAgentDashboard() {
                         }
                     },
                     modifier = Modifier.weight(1f),
-                    enabled = remoteService != null
+                    enabled = remoteService != null && !isProcessing
                 ) {
                     Text("Test Tap (500,1000)")
                 }
             }
 
+            // Input Field supporting both Natural Language AI Prompts and Direct Commands
             OutlinedTextField(
-                value = commandInput,
-                onValueChange = { commandInput = it },
-                label = { Text("Privileged Shell Command") },
+                value = promptInput,
+                onValueChange = { promptInput = it },
+                label = { Text(if (isModelReady) "Ask AI or Enter Shell Command" else "Privileged Shell Command") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
+                enabled = !isProcessing,
                 trailingIcon = {
                     IconButton(
                         onClick = {
-                            val cmd = commandInput
-                            commandInput = ""
+                            val query = promptInput
+                            promptInput = ""
+                            isProcessing = true
+
                             scope.launch(Dispatchers.IO) {
+                                val engine = liteRtEngine
                                 val service = remoteService
-                                val output = service?.execCommand(cmd) ?: "Service not connected"
-                                withContext(Dispatchers.Main) {
-                                    consoleOutput += "\n$ $cmd\n$output"
+
+                                if (isModelReady && engine != null) {
+                                    // 1. Local LiteRT-LM Inference
+                                    withContext(Dispatchers.Main) {
+                                        consoleOutput += "\n> $query\n[LiteRT Thinking...]\n"
+                                    }
+
+                                    var fullAiResponse = ""
+                                    val systemPrompt = "You are ShizukuAI. Output ONLY executable shell commands inside ```bash ``` blocks."
+                                    val conversation = engine.createConversation()
+
+                                    conversation.sendMessageAsync("$systemPrompt\n\nUser: $query")
+                                        .catch { e ->
+                                            withContext(Dispatchers.Main) {
+                                                consoleOutput += "[LiteRT Gen Error]: ${e.localizedMessage}\n"
+                                            }
+                                        }
+                                        .collect { chunk ->
+                                            fullAiResponse += chunk.contents
+                                        }
+
+                                    // 2. Parse Code Block
+                                    val regex = "```(?:bash|sh)?\\s*([\\s\\S]*?)\\s*```".toRegex()
+                                    val extractedCmd = regex.find(fullAiResponse)?.groupValues?.get(1)?.trim() ?: query
+
+                                    withContext(Dispatchers.Main) {
+                                        consoleOutput += "[AI Command]: $extractedCmd\n"
+                                    }
+
+                                    // 3. Execute Over Shizuku
+                                    val output = service?.execCommand(extractedCmd) ?: "Service not connected"
+                                    withContext(Dispatchers.Main) {
+                                        consoleOutput += "[Output]:\n$output\n"
+                                    }
+                                } else {
+                                    // Direct Shell Execution
+                                    val output = service?.execCommand(query) ?: "Service not connected"
+                                    withContext(Dispatchers.Main) {
+                                        consoleOutput += "\n$ $query\n$output\n"
+                                    }
                                 }
+                                isProcessing = false
                             }
                         },
-                        enabled = remoteService != null && commandInput.isNotBlank()
+                        enabled = remoteService != null && promptInput.isNotBlank() && !isProcessing
                     ) {
-                        Text("Run")
+                        Text(if (isProcessing) "..." else "Run")
                     }
                 }
             )
+
+            if (isProcessing) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
 
             Box(
                 modifier = Modifier
@@ -148,6 +233,12 @@ fun AiAgentDashboard() {
                     .padding(12.dp)
             ) {
                 val scrollState = rememberScrollState()
+                
+                // Auto-scroll console to bottom as text appends
+                LaunchedEffect(consoleOutput) {
+                    scrollState.animateScrollTo(scrollState.maxValue)
+                }
+
                 Text(
                     text = consoleOutput,
                     color = Color(0xFF00FF66),
