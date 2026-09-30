@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
 }
 
 android {
@@ -35,16 +36,30 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+
+    buildFeatures {
+        compose = true
+        aidl = true
+    }
 }
 
 dependencies {
-    // AndroidX & Material
+    // AndroidX Core & Material
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
 
+    // Jetpack Compose & Activity
+    implementation(libs.androidx.activity.compose)
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.ui)
+    implementation(libs.androidx.ui.graphics)
+    implementation(libs.androidx.ui.tooling.preview)
+    implementation(libs.androidx.material3)
+
     // Shizuku API & Provider
-    val shizukuVersion = "13.1.5"
-    implementation("dev.rikka.shizuku:api:$shizukuVersion")
-    implementation("dev.rikka.shizuku:provider:$shizukuVersion")
+    implementation(libs.shizuku.api)
+    implementation(libs.shizuku.provider)
+
+    debugImplementation(libs.androidx.ui.tooling)
 }
