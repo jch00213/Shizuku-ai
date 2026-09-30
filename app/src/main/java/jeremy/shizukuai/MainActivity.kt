@@ -14,10 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import com.google.ai.edge.litertlm.Engine
-import com.google.ai.edge.litertlm.EngineConfig
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -56,9 +53,9 @@ fun AiAgentDashboard() {
     var promptInput by remember { mutableStateOf("") }
     var isProcessing by remember { mutableStateOf(false) }
     var isModelReady by remember { mutableStateOf(false) }
-    
-    // Explicit type declaration prevents Kotlin compiler inference errors
-    var liteRtEngine by remember { mutableStateOf<Engine?>(null) }
+
+    // Use LiteRtEngine (Java) instead of importing com.google.ai.edge.litertlm.Engine directly
+    var liteRtEngine by remember { mutableStateOf<LiteRtEngine?>(null) }
 
     val scope = rememberCoroutineScope()
 
@@ -71,15 +68,13 @@ fun AiAgentDashboard() {
                     withContext(Dispatchers.Main) {
                         consoleOutput += "[LiteRT]: Loading model ${modelFile.name}...\n"
                     }
-                    
-                    // Instantiate Engine using EngineConfig
-                    val config = EngineConfig(modelPath = modelFile.absolutePath)
-                    val engine = Engine(config)
-                    engine.initialize()
-                    
+
+                    // Instantiate via Java Bridge
+                    val engine = LiteRtEngine.create(context, modelFile.absolutePath)
+
                     liteRtEngine = engine
                     isModelReady = true
-                    
+
                     withContext(Dispatchers.Main) {
                         consoleOutput += "[LiteRT]: Local LLM Ready!\n"
                     }
@@ -181,42 +176,24 @@ fun AiAgentDashboard() {
                                 val service = remoteService
 
                                 if (isModelReady && engine != null) {
-                                    // 1. Local LiteRT-LM Inference
                                     withContext(Dispatchers.Main) {
                                         consoleOutput += "\n> $query\n[LiteRT Thinking...]\n"
                                     }
 
-                                    var fullAiResponse = ""
-                                    val systemPrompt = "You are ShizukuAI. Output ONLY executable shell commands inside ```bash ``` blocks."
-                                    
-                                    val conversation = engine.createConversation()
-
-                                    conversation.sendMessageAsync("$systemPrompt\n\nUser: $query")
-                                        .catch { e ->
-                                            withContext(Dispatchers.Main) {
-                                                consoleOutput += "[LiteRT Gen Error]: ${e.localizedMessage}\n"
-                                            }
-                                        }
-                                        .collect { chunk ->
-                                            // Chunk is directly a String token in LiteRT-LM
-                                            fullAiResponse += chunk
-                                        }
-
-                                    // 2. Parse Code Block
-                                    val regex = "```(?:bash|sh)?\\s*([\\s\\S]*?)\\s*```".toRegex()
-                                    val extractedCmd = regex.find(fullAiResponse)?.groupValues?.get(1)?.trim() ?: query
+                                    // Run inference safely inside the Java engine wrapper
+                                    val extractedCmd = engine.generateCommand(query)
 
                                     withContext(Dispatchers.Main) {
                                         consoleOutput += "[AI Command]: $extractedCmd\n"
                                     }
 
-                                    // 3. Execute Over Shizuku
+                                    // Execute command via Shizuku user service
                                     val output = service?.execCommand(extractedCmd) ?: "Service not connected"
                                     withContext(Dispatchers.Main) {
                                         consoleOutput += "[Output]:\n$output\n"
                                     }
                                 } else {
-                                    // Direct Shell Execution
+                                    // Direct Shell Execution fallback
                                     val output = service?.execCommand(query) ?: "Service not connected"
                                     withContext(Dispatchers.Main) {
                                         consoleOutput += "\n$ $query\n$output\n"
@@ -244,7 +221,7 @@ fun AiAgentDashboard() {
                     .padding(12.dp)
             ) {
                 val scrollState = rememberScrollState()
-                
+
                 // Auto-scroll console to bottom as text appends
                 LaunchedEffect(consoleOutput) {
                     scrollState.animateScrollTo(scrollState.maxValue)
