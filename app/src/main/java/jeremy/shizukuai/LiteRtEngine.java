@@ -1,7 +1,9 @@
 package com.jeremy.shizukuai;
 
 import android.content.Context;
+import com.google.ai.edge.litertlm.Conversation;
 import com.google.ai.edge.litertlm.Engine;
+import com.google.ai.edge.litertlm.EngineConfig;
 
 public class LiteRtEngine implements AutoCloseable {
 
@@ -12,25 +14,20 @@ public class LiteRtEngine implements AutoCloseable {
     }
 
     public static LiteRtEngine create(Context context, String modelPath) {
-        // In 0.17.1, Engine handles initialization via builder/model path directly
-        Engine engine = Engine.builder(context)
-                .setModelPath(modelPath)
-                .build();
-
+        EngineConfig config = new EngineConfig(modelPath);
+        Engine engine = new Engine(config);
         engine.initialize();
         return new LiteRtEngine(engine);
     }
 
     public String generateCommand(String prompt) {
-        try {
+        try (Conversation conversation = engine.createConversation()) {
             String fullPrompt = "You are an Android shell command agent. " +
                     "Convert the user intent into a single raw shell command. " +
                     "Return ONLY the executable command, no markdown, no explanation.\n" +
                     "User Request: " + prompt;
 
-            // In 0.17.1, generate / sendMessage is called directly on Engine or its Session
-            String responseText = engine.generate(fullPrompt);
-
+            String responseText = conversation.sendMessage(fullPrompt);
             return cleanOutput(responseText);
         } catch (Exception e) {
             return "echo Error: " + e.getLocalizedMessage();
