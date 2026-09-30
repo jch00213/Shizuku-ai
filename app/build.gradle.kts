@@ -48,6 +48,11 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+        freeCompilerArgs += listOf(
+            "-Xskip-prerelease-check",
+            "-Xallow-unstable-dependencies",
+            "-Xsuppress-version-warnings"
+        )
     }
 
     buildFeatures {
@@ -56,7 +61,7 @@ android {
         buildConfig = true
     }
 
-    // Required for LiteRT / MediaPipe native JNI libraries (.so)
+    // Required for LiteRT native JNI libraries (.so)
     packaging {
         jniLibs {
             useLegacyPackaging = true
@@ -78,8 +83,8 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
 
-    // Replace MediaPipe GenAI with LiteRT-LM SDK
-    implementation(libs.litertlm.android) // Or implementation("com.google.ai.edge.litertlm:litertlm-android:0.17.0")
+    // LiteRT-LM SDK
+    implementation(libs.litertlm.android)
 
     // Shizuku API & Provider
     implementation(libs.shizuku.api)
