@@ -19,7 +19,7 @@ public class LiteRtEngine implements AutoCloseable {
     public static LiteRtEngine create(Context context, String modelPath) {
         EngineConfig config = new EngineConfig(
                 modelPath,
-                Backend.CPU,
+                new Backend.CPU(),
                 null,
                 null,
                 null,
@@ -32,7 +32,6 @@ public class LiteRtEngine implements AutoCloseable {
     }
 
     public String generateCommand(String prompt) {
-        // Construct basic conversation config
         ConversationConfig conversationConfig = new ConversationConfig();
 
         try (Conversation conversation = engine.createConversation(conversationConfig)) {
@@ -42,11 +41,20 @@ public class LiteRtEngine implements AutoCloseable {
                     "User Request: " + prompt;
 
             Message responseMessage = conversation.sendMessage(fullPrompt);
-            String responseText = (responseMessage != null) ? responseMessage.getText() : "";
+            String responseText = extractMessageText(responseMessage);
 
             return cleanOutput(responseText);
         } catch (Exception e) {
             return "echo Error: " + e.getLocalizedMessage();
+        }
+    }
+
+    private String extractMessageText(Message message) {
+        if (message == null) return "";
+        try {
+            return message.toString();
+        } catch (Exception e) {
+            return "";
         }
     }
 
