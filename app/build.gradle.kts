@@ -49,6 +49,8 @@ android {
     kotlinOptions {
         jvmTarget = "17"
         freeCompilerArgs += listOf(
+            "-Xuse-k2=false",                      // Forces K1 compiler to avoid K2 FIR metadata crash
+            "-Xskip-metadata-version-check",        // Bypasses metadata enforcement
             "-Xskip-prerelease-check",
             "-Xallow-unstable-dependencies",
             "-Xsuppress-version-warnings"
