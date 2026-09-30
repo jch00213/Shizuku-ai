@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.google.ai.edge.litertlm.Engine
+import com.google.ai.edge.litertlm.EngineConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
@@ -55,6 +56,8 @@ fun AiAgentDashboard() {
     var promptInput by remember { mutableStateOf("") }
     var isProcessing by remember { mutableStateOf(false) }
     var isModelReady by remember { mutableStateOf(false) }
+    
+    // Explicit type declaration prevents Kotlin compiler inference errors
     var liteRtEngine by remember { mutableStateOf<Engine?>(null) }
 
     val scope = rememberCoroutineScope()
@@ -66,11 +69,17 @@ fun AiAgentDashboard() {
             if (modelFile.exists()) {
                 try {
                     withContext(Dispatchers.Main) {
-                        consoleOutput += "[LiteRT]: Loading model ${modelFile.name} onto GPU...\n"
+                        consoleOutput += "[LiteRT]: Loading model ${modelFile.name}...\n"
                     }
-                    val engine = Engine.create(modelFile.absolutePath)
+                    
+                    // Construct Engine using EngineConfig
+                    val config = EngineConfig(modelPath = modelFile.absolutePath)
+                    val engine = Engine(config)
+                    engine.initialize()
+                    
                     liteRtEngine = engine
                     isModelReady = true
+                    
                     withContext(Dispatchers.Main) {
                         consoleOutput += "[LiteRT]: Local LLM Ready!\n"
                     }
@@ -179,6 +188,7 @@ fun AiAgentDashboard() {
 
                                     var fullAiResponse = ""
                                     val systemPrompt = "You are ShizukuAI. Output ONLY executable shell commands inside ```bash ``` blocks."
+                                    
                                     val conversation = engine.createConversation()
 
                                     conversation.sendMessageAsync("$systemPrompt\n\nUser: $query")
@@ -188,7 +198,8 @@ fun AiAgentDashboard() {
                                             }
                                         }
                                         .collect { chunk ->
-                                            fullAiResponse += chunk.contents
+                                            // Chunk is directly a String emission in LiteRT-LM
+                                            fullAiResponse += chunk
                                         }
 
                                     // 2. Parse Code Block
