@@ -42,6 +42,13 @@ android {
         aidl = true
         buildConfig = true
     }
+
+    // Required for LiteRT native JNI libraries (.so)
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
 }
 
 dependencies {
@@ -57,6 +64,9 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+
+    // LiteRT-LM On-Device GenAI Engine
+    implementation("com.google.ai.edge.litertlm:litertlm-android:latest.release")
 
     // Shizuku API & Provider
     implementation(libs.shizuku.api)
