@@ -72,7 +72,7 @@ fun AiAgentDashboard() {
                         consoleOutput += "[LiteRT]: Loading model ${modelFile.name}...\n"
                     }
                     
-                    // Construct Engine using EngineConfig
+                    // Instantiate Engine using EngineConfig
                     val config = EngineConfig(modelPath = modelFile.absolutePath)
                     val engine = Engine(config)
                     engine.initialize()
@@ -198,7 +198,7 @@ fun AiAgentDashboard() {
                                             }
                                         }
                                         .collect { chunk ->
-                                            // Chunk is directly a String emission in LiteRT-LM
+                                            // Chunk is directly a String token in LiteRT-LM
                                             fullAiResponse += chunk
                                         }
 
