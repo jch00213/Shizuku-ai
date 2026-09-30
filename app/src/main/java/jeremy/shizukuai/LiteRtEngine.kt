@@ -1,22 +1,30 @@
 package com.jeremy.shizukuai
 
 import android.content.Context
-import com.google.mediapipe.tasks.genai.llminference.LlmInference
+import com.google.ai.edge.litertlm.Conversation
+import com.google.ai.edge.litertlm.Engine
+import com.google.ai.edge.litertlm.EngineConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-class LiteRtEngine private constructor(private val llmInference: LlmInference) {
+class LiteRtEngine private constructor(
+    private val engine: Engine,
+    private val conversation: Conversation
+) : AutoCloseable {
 
     companion object {
-        fun create(context: Context, modelPath: String): LiteRtEngine {
-            val options = LlmInference.LlmInferenceOptions.builder()
-                .setModelPath(modelPath) // Local path to Gemma/LiteRT-LM task model file
-                .setMaxTokens(512)
-                .setTemperature(0.2f)
-                .build()
-
-            val instance = LlmInference.createFromOptions(context, options)
-            return LiteRtEngine(instance)
+        suspend fun create(context: Context, modelPath: String): LiteRtEngine = withContext(Dispatchers.IO) {
+            val config = EngineConfig(
+                modelPath = modelPath,
+                maxTokens = 512,
+                temperature = 0.2f
+            )
+            
+            val engine = Engine(config)
+            engine.initialize()
+            val conversation = engine.createConversation()
+            
+            LiteRtEngine(engine, conversation)
         }
     }
 
@@ -31,7 +39,7 @@ class LiteRtEngine private constructor(private val llmInference: LlmInference) {
         val fullPrompt = "$systemContext\n\nUser: $userPrompt\nAssistant:"
 
         try {
-            val rawResponse = llmInference.generateResponse(fullPrompt)
+            val rawResponse = conversation.sendMessage(fullPrompt)
             extractCommand(rawResponse) ?: rawResponse
         } catch (e: Exception) {
             "Error executing LiteRT inference: ${e.localizedMessage}"
@@ -41,5 +49,10 @@ class LiteRtEngine private constructor(private val llmInference: LlmInference) {
     private fun extractCommand(text: String): String? {
         val regex = "```(?:bash|sh)?\\s*([\\s\\S]*?)\\s*```".toRegex()
         return regex.find(text)?.groupValues?.get(1)?.trim()
+    }
+
+    override fun close() {
+        conversation.close()
+        engine.close()
     }
 }
