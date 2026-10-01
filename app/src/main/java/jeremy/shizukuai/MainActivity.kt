@@ -270,17 +270,17 @@ fun AppHost() {
             SettingsScreen(
                 onBack = { navController.popBackStack() },
                 selectedModelPath = currentModelFileName,
-                onModelPathChanged = { currentModelFileName = it },
+                onModelPathChanged = { newPath -> currentModelFileName = newPath },
                 onReloadModel = { loadModel(currentModelFileName) },
                 isShizukuConnected = remoteService != null || isGranted,
                 onRequestShizukuPermission = { ShizukuManager.checkPermission() },
-                // Pass Matrix Bridge controls
+                // Matrix Bridge parameters explicitly typed
                 matrixHomeserver = matrixHomeserver,
-                onMatrixHomeserverChanged = { matrixHomeserver = it },
+                onMatrixHomeserverChanged = { newServer -> matrixHomeserver = newServer },
                 matrixToken = matrixToken,
-                onMatrixTokenChanged = { matrixToken = it },
+                onMatrixTokenChanged = { newToken -> matrixToken = newToken },
                 matrixRoomId = matrixRoomId,
-                onMatrixRoomIdChanged = { matrixRoomId = it },
+                onMatrixRoomIdChanged = { newRoom -> matrixRoomId = newRoom },
                 isMatrixConnected = isMatrixConnected,
                 onToggleMatrixAgent = { toggleMatrixAgent() }
             )
