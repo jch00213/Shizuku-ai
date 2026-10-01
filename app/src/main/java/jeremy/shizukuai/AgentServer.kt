@@ -5,7 +5,7 @@ import io.ktor.serialization.gson.gson
 import io.ktor.server.application.call
 import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
-import io.ktor.server.cio.CIOApplicationEngine
+import io.ktor.server.engine.ApplicationEngine
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.request.receive
@@ -21,7 +21,7 @@ data class InferenceResponse(val command: String, val status: String = "success"
 
 class AgentServer(private val context: Context, private val engineProvider: () -> LiteRtEngine?) {
 
-    private var server: CIOApplicationEngine? = null
+    private var server: ApplicationEngine? = null
 
     fun start(port: Int = 8080) {
         if (server != null) return
@@ -47,7 +47,7 @@ class AgentServer(private val context: Context, private val engineProvider: () -
                     }
 
                     val resultCommand = withContext(Dispatchers.IO) {
-                        engine.generateCommand(context, request.prompt)
+                        engine.generateCommand(this@AgentServer.context, request.prompt)
                     }
 
                     call.respond(InferenceResponse(command = resultCommand))
