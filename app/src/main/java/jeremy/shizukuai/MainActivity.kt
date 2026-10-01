@@ -78,7 +78,7 @@ fun AppHost() {
                     isModelReady = true
 
                     withContext(Dispatchers.Main) {
-                        messages.add(ChatMessage("[LiteRT]: Model Ready!", MessageType.SYSTEM))
+                        messages.add(ChatMessage("[LiteRT]: Model Ready! Active: ${modelFile.name}", MessageType.SYSTEM))
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
@@ -178,8 +178,9 @@ fun AppHost() {
         composable(Screen.HuggingFace.route) {
             HuggingFaceScreen(
                 onBack = { navController.popBackStack() },
-                onDownloadModel = { fileName ->
+                onModelDownloaded = { fileName ->
                     currentModelFileName = fileName
+                    loadModel(fileName)
                 }
             )
         }
