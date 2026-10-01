@@ -1,6 +1,7 @@
 package com.jeremy.shizukuai
 
 import android.os.Bundle
+import android.os.Environment
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
@@ -63,17 +64,33 @@ fun AppHost() {
     var liteRtEngine by remember { mutableStateOf<LiteRtEngine?>(null) }
     var currentModelFileName by remember { mutableStateOf("gemma-3n-E2B-it-int4.bin") }
 
+    fun resolveModelFile(fileName: String): File {
+        val customDir = File(Environment.getExternalStorageDirectory(), "models")
+        if (!customDir.exists()) {
+            customDir.mkdirs()
+        }
+
+        val primaryFile = File(customDir, fileName)
+        val fallbackFile = File(context.getExternalFilesDir(null), fileName)
+
+        return when {
+            primaryFile.exists() -> primaryFile
+            fallbackFile.exists() -> fallbackFile
+            else -> primaryFile
+        }
+    }
+
     fun loadModel(fileName: String) {
         scope.launch(Dispatchers.IO) {
             isModelReady = false
             liteRtEngine?.close()
             liteRtEngine = null
 
-            val modelFile = File(context.getExternalFilesDir(null), fileName)
+            val modelFile = resolveModelFile(fileName)
             if (modelFile.exists()) {
                 try {
                     withContext(Dispatchers.Main) {
-                        messages.add(ChatMessage("[LiteRT]: Loading model ${modelFile.name}...", MessageType.SYSTEM))
+                        messages.add(ChatMessage("[LiteRT]: Loading model ${modelFile.name} from ${modelFile.parent}...", MessageType.SYSTEM))
                     }
 
                     val engine = LiteRtEngine.create(context, modelFile.absolutePath)
@@ -92,7 +109,7 @@ fun AppHost() {
                 withContext(Dispatchers.Main) {
                     messages.add(
                         ChatMessage(
-                            "[LiteRT]: Model missing at ${modelFile.name}. Open Hugging Face screen to download.",
+                            "[LiteRT]: Model missing at ${modelFile.absolutePath}. Place your file in /sdcard/models/ or download via Hugging Face.",
                             MessageType.SYSTEM
                         )
                     )
