@@ -47,32 +47,40 @@ fun HuggingFaceScreen(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
+        
+        val formattedUrl = if (url.contains("huggingface.co") && !url.contains("?download=true")) {
+            "$url?download=true"
+        } else {
+            url
+        }
+
+        customUrl = formattedUrl
         val targetPath = File(context.getExternalFilesDir(null), fileName).absolutePath
-        ModelDownloadService.start(context, url, targetPath, hfToken.ifBlank { null })
+        ModelDownloadService.start(context, formattedUrl, targetPath, hfToken.ifBlank { null })
     }
 
     val presetModels = remember {
         listOf(
             ModelItem(
+                name = "Gemma 2B IT (LiteRT Task)",
+                repoId = "google/gemma-2b-it-litert",
+                fileName = "gemma-2b-it-litert.bin",
+                size = "1.3 GB",
+                downloadUrl = "https://huggingface.co/google/gemma-2b-it-litert/resolve/main/model.bin?download=true"
+            ),
+            ModelItem(
                 name = "Gemma 3n E2B INT4",
                 repoId = "google/gemma-3n-E2B-it-int4",
                 fileName = "gemma-3n-E2B-it-int4.bin",
                 size = "1.2 GB",
-                downloadUrl = "https://huggingface.co/google/gemma-3n-E2B-it-int4/resolve/main/gemma-3n-E2B-it-int4.bin"
-            ),
-            ModelItem(
-                name = "Gemma 2B LiteRT",
-                repoId = "google/gemma-2b-it-litert",
-                fileName = "gemma-2b-it-litert.bin",
-                size = "1.3 GB",
-                downloadUrl = "https://huggingface.co/google/gemma-2b-it-litert/resolve/main/model.bin"
+                downloadUrl = "https://huggingface.co/google/gemma-3n-E2B-it-int4/resolve/main/gemma-3n-E2B-it-int4.bin?download=true"
             ),
             ModelItem(
                 name = "Qwen 2.5 0.5B Instruct",
                 repoId = "Qwen/Qwen2.5-0.5B-Instruct",
                 fileName = "qwen2.5-0.5b-instruct.bin",
                 size = "350 MB",
-                downloadUrl = "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct/resolve/main/model.bin"
+                downloadUrl = "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct/resolve/main/model.bin?download=true"
             )
         )
     }
@@ -135,7 +143,12 @@ fun HuggingFaceScreen(
                 Button(
                     onClick = {
                         if (customUrl.isNotBlank()) {
-                            val fileName = customUrl.substringAfterLast("/").ifEmpty { "custom_model.bin" }
+                            val cleanName = customUrl.substringBefore("?").substringAfterLast("/")
+                            val fileName = if (cleanName.endsWith(".bin") || cleanName.endsWith(".task")) {
+                                cleanName
+                            } else {
+                                "custom_model.bin"
+                            }
                             triggerDownload(customUrl, fileName)
                         }
                     },
@@ -171,7 +184,7 @@ fun HuggingFaceScreen(
                             }
                             Spacer(modifier = Modifier.height(8.dp))
                             LinearProgressIndicator(
-                                progress = { state.progress / 100f },
+                                progress = { if (state.totalBytes > 0) state.progress / 100f else 0f },
                                 modifier = Modifier.fillMaxWidth()
                             )
                             Spacer(modifier = Modifier.height(6.dp))
