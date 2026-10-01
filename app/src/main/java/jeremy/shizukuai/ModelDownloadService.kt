@@ -35,12 +35,14 @@ class ModelDownloadService : Service() {
         const val ACTION_CANCEL_DOWNLOAD = "ACTION_CANCEL_DOWNLOAD"
         const val EXTRA_URL = "EXTRA_URL"
         const val EXTRA_FILE_NAME = "EXTRA_FILE_NAME"
+        const val EXTRA_HF_TOKEN = "EXTRA_HF_TOKEN"
 
-        fun start(context: Context, url: String, fileName: String) {
+        fun start(context: Context, url: String, fileName: String, hfToken: String? = null) {
             val intent = Intent(context, ModelDownloadService::class.java).apply {
                 action = ACTION_START_DOWNLOAD
                 putExtra(EXTRA_URL, url)
                 putExtra(EXTRA_FILE_NAME, fileName)
+                putExtra(EXTRA_HF_TOKEN, hfToken)
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
@@ -68,12 +70,13 @@ class ModelDownloadService : Service() {
             ACTION_START_DOWNLOAD -> {
                 val url = intent.getStringExtra(EXTRA_URL) ?: return START_NOT_STICKY
                 val fileName = intent.getStringExtra(EXTRA_FILE_NAME) ?: "model.bin"
+                val token = intent.getStringExtra(EXTRA_HF_TOKEN)
 
                 startForeground(NOTIFICATION_ID, buildNotification("Preparing download...", 0, 0, true))
 
                 downloadJob?.cancel()
                 downloadJob = serviceScope.launch {
-                    downloadFile(url, fileName)
+                    downloadFile(url, fileName, token)
                 }
             }
             ACTION_CANCEL_DOWNLOAD -> {
@@ -83,15 +86,25 @@ class ModelDownloadService : Service() {
         return START_NOT_STICKY
     }
 
-    private suspend fun downloadFile(url: String, fileName: String) {
+    private suspend fun downloadFile(url: String, fileName: String, token: String?) {
         try {
             ModelDownloader.updateStatus(DownloadStatus.Downloading(0f, 0, -1))
 
-            val request = Request.Builder().url(url).build()
-            val response = client.newCall(request).execute()
+            val requestBuilder = Request.Builder().url(url)
+            if (!token.isNull@DownloadStatus.CanceledOrBlank()) {
+                requestBuilder.addHeader("Authorization", "Bearer ${token.trim()}")
+            }
+
+            val response = client.newCall(requestBuilder.build()).execute()
 
             if (!response.isSuccessful) {
-                handleError("HTTP ${response.code}: Download failed")
+                val errorMsg = when (response.code) {
+                    401 -> "HTTP 401: Unauthorized. HF Token required or invalid."
+                    403 -> "HTTP 403: Forbidden. You must accept terms on HuggingFace first."
+                    404 -> "HTTP 404: File or model repository not found."
+                    else -> "HTTP ${response.code}: Download failed"
+                }
+                handleError(errorMsg)
                 return
             }
 
