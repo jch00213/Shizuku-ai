@@ -1,4 +1,3 @@
-// ChatScreen.kt
 package com.jeremy.shizukuai.ui
 
 import androidx.compose.foundation.background
@@ -10,16 +9,23 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+
+enum class MessageType {
+    USER, AI, SYSTEM, COMMAND_OUTPUT
+}
 
 data class ChatMessage(
     val text: String,
-    val isUser: Boolean,
+    val type: MessageType,
     val timestamp: Long = System.currentTimeMillis()
 )
 
@@ -29,16 +35,30 @@ fun ChatScreen(
     onNavigateToSettings: () -> Unit,
     onNavigateToHuggingFace: () -> Unit,
     onSendMessage: (String) -> Unit,
+    onDumpUi: () -> Unit,
+    onTestTap: () -> Unit,
     messages: List<ChatMessage>,
-    isLoading: Boolean
+    isLoading: Boolean,
+    isShizukuConnected: Boolean,
+    isModelReady: Boolean
 ) {
     var inputText by remember { mutableStateOf("") }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Shizuku AI") },
+                title = { Text("Shizuku AI Terminal") },
                 actions = {
+                    AssistChip(
+                        onClick = { },
+                        label = {
+                            Text(if (isShizukuConnected) "Shizuku Ready" else "Disconnected")
+                        },
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = if (isShizukuConnected) Color(0xFF1B5E20) else Color(0xFFB71C1C)
+                        ),
+                        modifier = Modifier.padding(end = 4.dp)
+                    )
                     IconButton(onClick = onNavigateToHuggingFace) {
                         Icon(Icons.Default.CloudDownload, contentDescription = "Hugging Face Models")
                     }
@@ -54,10 +74,42 @@ fun ChatScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onDumpUi,
+                    enabled = isShizukuConnected && !isLoading,
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = 8.dp)
+                ) {
+                    Icon(Icons.Default.Terminal, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Dump UI", style = MaterialTheme.typography.labelMedium)
+                }
+
+                OutlinedButton(
+                    onClick = onTestTap,
+                    enabled = isShizukuConnected && !isLoading,
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = 8.dp)
+                ) {
+                    Icon(Icons.Default.TouchApp, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Tap (500,1000)", style = MaterialTheme.typography.labelMedium)
+                }
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
             LazyColumn(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(horizontal = 16.dp),
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp),
                 reverseLayout = true
             ) {
                 if (isLoading) {
@@ -66,14 +118,14 @@ fun ChatScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 8.dp),
-                            contentAlignment = Alignment.CenterStart
+                            contentAlignment = Alignment.Center
                         ) {
                             CircularProgressIndicator(modifier = Modifier.size(24.dp))
                         }
                     }
                 }
                 items(messages.reversed()) { msg ->
-                    ChatBubble(message = msg)
+                    ChatBubbleItem(message = msg)
                     Spacer(modifier = Modifier.height(8.dp))
                 }
             }
@@ -91,9 +143,14 @@ fun ChatScreen(
                     OutlinedTextField(
                         value = inputText,
                         onValueChange = { inputText = it },
-                        placeholder = { Text("Ask or execute command...") },
+                        placeholder = {
+                            Text(
+                                if (isModelReady) "Prompt AI or type shell command..."
+                                else "Direct Shizuku shell command..."
+                            )
+                        },
                         modifier = Modifier.weight(1f),
-                        maxLines = 4
+                        maxLines = 3
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     IconButton(
@@ -103,7 +160,7 @@ fun ChatScreen(
                                 inputText = ""
                             }
                         },
-                        enabled = inputText.isNotBlank() && !isLoading
+                        enabled = inputText.isNotBlank() && !isLoading && isShizukuConnected
                     ) {
                         Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send")
                     }
@@ -114,10 +171,24 @@ fun ChatScreen(
 }
 
 @Composable
-fun ChatBubble(message: ChatMessage) {
-    val alignment = if (message.isUser) Alignment.CenterEnd else Alignment.CenterStart
-    val bgColor = if (message.isUser) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
-    val textColor = if (message.isUser) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
+fun ChatBubbleItem(message: ChatMessage) {
+    val isUser = message.type == MessageType.USER
+    val isCommandOutput = message.type == MessageType.COMMAND_OUTPUT
+    val alignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart
+
+    val bgColor = when (message.type) {
+        MessageType.USER -> MaterialTheme.colorScheme.primaryContainer
+        MessageType.AI -> MaterialTheme.colorScheme.secondaryContainer
+        MessageType.SYSTEM -> MaterialTheme.colorScheme.surfaceVariant
+        MessageType.COMMAND_OUTPUT -> Color(0xFF1E1E1E)
+    }
+
+    val textColor = when (message.type) {
+        MessageType.USER -> MaterialTheme.colorScheme.onPrimaryContainer
+        MessageType.AI -> MaterialTheme.colorScheme.onSecondaryContainer
+        MessageType.SYSTEM -> MaterialTheme.colorScheme.onSurfaceVariant
+        MessageType.COMMAND_OUTPUT -> Color(0xFF00FF66)
+    }
 
     Box(
         modifier = Modifier.fillMaxWidth(),
@@ -125,21 +196,15 @@ fun ChatBubble(message: ChatMessage) {
     ) {
         Box(
             modifier = Modifier
-                .clip(
-                    RoundedCornerShape(
-                        topStart = 16.dp,
-                        topEnd = 16.dp,
-                        bottomStart = if (message.isUser) 16.dp else 4.dp,
-                        bottomEnd = if (message.isUser) 4.dp else 16.dp
-                    )
-                )
-                .background(bgColor)
+                .widthIn(max = 320.dp)
+                .background(bgColor, RoundedCornerShape(12.dp))
                 .padding(12.dp)
         ) {
             Text(
                 text = message.text,
                 color = textColor,
-                style = MaterialTheme.typography.bodyLarge
+                fontFamily = if (isCommandOutput) FontFamily.Monospace else FontFamily.Default,
+                style = MaterialTheme.typography.bodyMedium
             )
         }
     }
