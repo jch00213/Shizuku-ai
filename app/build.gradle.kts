@@ -75,12 +75,18 @@ android {
 dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
-    // Matrix / Ktor Network Engine & JSON Serialization
+    // Matrix / Ktor Network Client & JSON Serialization
     implementation("io.ktor:ktor-client-core:2.3.12")
     implementation("io.ktor:ktor-client-cio:2.3.12")
     implementation("io.ktor:ktor-client-content-negotiation:2.3.12")
     implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.12")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+
+    // Ktor Embedded HTTP Server (AgentServer)
+    implementation("io.ktor:ktor-server-core:2.3.12")
+    implementation("io.ktor:ktor-server-cio:2.3.12")
+    implementation("io.ktor:ktor-server-content-negotiation:2.3.12")
+    implementation("io.ktor:ktor-serialization-gson:2.3.12")
 
     // Core & Material
     implementation(libs.androidx.core.ktx)
