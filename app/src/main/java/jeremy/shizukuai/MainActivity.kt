@@ -21,10 +21,10 @@ import com.jeremy.shizukuai.ui.Screen
 import com.jeremy.shizukuai.ui.SettingsScreen
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-
 
 class MainActivity : ComponentActivity() {
 
@@ -62,12 +62,19 @@ fun AppHost() {
     var isProcessing by remember { mutableStateOf(false) }
     var isModelReady by remember { mutableStateOf(false) }
     var liteRtEngine by remember { mutableStateOf<LiteRtEngine?>(null) }
-    var currentModelFileName by remember { mutableStateOf("gemma2-2b-it-int8-web.task.bin") }
+    var currentModelFileName by remember { mutableStateOf("qwen2.5-1.5b-instruct-gpu-int4.bin") }
+
+    // Matrix Agent State
+    var matrixHomeserver by remember { mutableStateOf("https://matrix.org") }
+    var matrixToken by remember { mutableStateOf("") }
+    var matrixRoomId by remember { mutableStateOf("") }
+    var isMatrixConnected by remember { mutableStateOf(false) }
+    var matrixBridge by remember { mutableStateOf<MatrixAgentBridge?>(null) }
+    var matrixJob by remember { mutableStateOf<Job?>(null) }
 
     fun resolveModelFile(fileName: String): File {
         val cleanName = fileName.trim()
 
-        // 1. Explicitly candidate /sdcard/models along with secondary mount paths
         val candidateDirs = listOf(
             File("/sdcard/models"),
             File("/storage/emulated/0/models"),
@@ -80,13 +87,11 @@ fun AppHost() {
                 try { dir.mkdirs() } catch (_: Exception) {}
             }
 
-            // Direct file check
             val directFile = File(dir, cleanName)
             if (directFile.exists() && directFile.isFile) {
                 return directFile
             }
 
-            // Case-insensitive file check in the folder
             val caseMatch = dir.listFiles()?.firstOrNull { 
                 it.isFile && it.name.equals(cleanName, ignoreCase = true) 
             }
@@ -95,13 +100,11 @@ fun AppHost() {
             }
         }
 
-        // 2. App-specific internal storage fallback (/sdcard/Android/data/com.jeremy.shizukuai/files/)
         val appSpecificFile = File(context.getExternalFilesDir(null), cleanName)
         if (appSpecificFile.exists() && appSpecificFile.isFile) {
             return appSpecificFile
         }
 
-        // Default primary return point targeting /sdcard/models/
         return File("/sdcard/models", cleanName)
     }
 
@@ -138,6 +141,60 @@ fun AppHost() {
                             MessageType.SYSTEM
                         )
                     )
+                }
+            }
+        }
+    }
+
+    fun toggleMatrixAgent() {
+        if (isMatrixConnected) {
+            matrixJob?.cancel()
+            matrixBridge?.stop()
+            matrixBridge = null
+            isMatrixConnected = false
+            messages.add(ChatMessage("[Matrix Agent]: Stopped.", MessageType.SYSTEM))
+        } else {
+            if (matrixHomeserver.isBlank() || matrixToken.isBlank() || matrixRoomId.isBlank()) {
+                messages.add(ChatMessage("[Matrix Error]: Please configure Homeserver, Access Token, and Room ID in Settings.", MessageType.SYSTEM))
+                return
+            }
+
+            val bridge = MatrixAgentBridge(matrixHomeserver, matrixToken, matrixRoomId)
+            matrixBridge = bridge
+            isMatrixConnected = true
+
+            messages.add(ChatMessage("[Matrix Agent]: Starting sync loop on $matrixHomeserver...", MessageType.SYSTEM))
+
+            matrixJob = bridge.startListening { sender, prompt ->
+                withContext(Dispatchers.Main) {
+                    messages.add(ChatMessage("[Matrix @ $sender]: $prompt", MessageType.USER))
+                }
+
+                val engine = liteRtEngine
+                val service = remoteService
+
+                if (engine != null && isModelReady) {
+                    val extractedCmd = engine.generateCommand(prompt)
+
+                    withContext(Dispatchers.Main) {
+                        messages.add(ChatMessage("Extracted Command:\n$extractedCmd", MessageType.AI))
+                    }
+
+                    val output = service?.execCommand(extractedCmd) ?: "Shizuku service not connected"
+
+                    withContext(Dispatchers.Main) {
+                        messages.add(ChatMessage(output, MessageType.COMMAND_OUTPUT))
+                    }
+
+                    "🤖 [OpenClaw Agent Execution]\nCommand:\n$extractedCmd\n\nOutput:\n$output"
+                } else {
+                    val output = service?.execCommand(prompt) ?: "Shizuku service not connected"
+                    
+                    withContext(Dispatchers.Main) {
+                        messages.add(ChatMessage(output, MessageType.COMMAND_OUTPUT))
+                    }
+
+                    "⚠️ [Raw Shell Fallback (Model Not Loaded)]\nOutput:\n$output"
                 }
             }
         }
@@ -216,7 +273,16 @@ fun AppHost() {
                 onModelPathChanged = { currentModelFileName = it },
                 onReloadModel = { loadModel(currentModelFileName) },
                 isShizukuConnected = remoteService != null || isGranted,
-                onRequestShizukuPermission = { ShizukuManager.checkPermission() }
+                onRequestShizukuPermission = { ShizukuManager.checkPermission() },
+                // Pass Matrix Bridge controls
+                matrixHomeserver = matrixHomeserver,
+                onMatrixHomeserverChanged = { matrixHomeserver = it },
+                matrixToken = matrixToken,
+                onMatrixTokenChanged = { matrixToken = it },
+                matrixRoomId = matrixRoomId,
+                onMatrixRoomIdChanged = { matrixRoomId = it },
+                isMatrixConnected = isMatrixConnected,
+                onToggleMatrixAgent = { toggleMatrixAgent() }
             )
         }
 
