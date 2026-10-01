@@ -11,7 +11,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.jeremy.shizukuai.ui.*
+import com.jeremy.shizukuai.ui.ChatMessage
+import com.jeremy.shizukuai.ui.ChatScreen
+import com.jeremy.shizukuai.ui.HuggingFaceScreen
+import com.jeremy.shizukuai.ui.MessageType
+import com.jeremy.shizukuai.ui.Screen
+import com.jeremy.shizukuai.ui.SettingsScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -55,7 +60,6 @@ fun AppHost() {
     var liteRtEngine by remember { mutableStateOf<LiteRtEngine?>(null) }
     var currentModelFileName by remember { mutableStateOf("gemma-3n-E2B-it-int4.bin") }
 
-    // Function to initialize or reload model
     fun loadModel(fileName: String) {
         scope.launch(Dispatchers.IO) {
             isModelReady = false
@@ -163,8 +167,8 @@ fun AppHost() {
         composable(Screen.Settings.route) {
             SettingsScreen(
                 onBack = { navController.popBackStack() },
-                selectedFileName = currentModelFileName,
-                onFileNameChanged = { currentModelFileName = it },
+                selectedModelPath = currentModelFileName,
+                onModelPathChanged = { currentModelFileName = it },
                 onReloadModel = { loadModel(currentModelFileName) },
                 isShizukuConnected = remoteService != null || isGranted,
                 onRequestShizukuPermission = { ShizukuManager.checkPermission() }
@@ -174,7 +178,7 @@ fun AppHost() {
         composable(Screen.HuggingFace.route) {
             HuggingFaceScreen(
                 onBack = { navController.popBackStack() },
-                onModelDownloaded = { fileName ->
+                onDownloadModel = { fileName ->
                     currentModelFileName = fileName
                 }
             )
