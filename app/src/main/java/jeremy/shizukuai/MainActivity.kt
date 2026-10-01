@@ -11,16 +11,19 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+
+// Keep ui imports ONLY for files actually located inside the 'ui' package directory
 import com.jeremy.shizukuai.ui.ChatMessage
 import com.jeremy.shizukuai.ui.ChatScreen
-import com.jeremy.shizukuai.ui.HuggingFaceScreen
 import com.jeremy.shizukuai.ui.MessageType
 import com.jeremy.shizukuai.ui.Screen
 import com.jeremy.shizukuai.ui.SettingsScreen
+
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+
 
 class MainActivity : ComponentActivity() {
 
