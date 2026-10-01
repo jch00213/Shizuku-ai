@@ -1,6 +1,8 @@
 package com.jeremy.shizukuai.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
@@ -17,7 +19,15 @@ fun SettingsScreen(
     onModelPathChanged: (String) -> Unit,
     onReloadModel: () -> Unit,
     isShizukuConnected: Boolean,
-    onRequestShizukuPermission: () -> Unit
+    onRequestShizukuPermission: () -> Unit,
+    matrixHomeserver: String,
+    onMatrixHomeserverChanged: (String) -> Unit,
+    matrixToken: String,
+    onMatrixTokenChanged: (String) -> Unit,
+    matrixRoomId: String,
+    onMatrixRoomIdChanged: (String) -> Unit,
+    isMatrixConnected: Boolean,
+    onToggleMatrixAgent: () -> Unit
 ) {
     var autoExecute by remember { mutableStateOf(true) }
 
@@ -37,7 +47,8 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(16.dp),
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(text = "LiteRT Engine Configuration", style = MaterialTheme.typography.titleMedium)
@@ -46,7 +57,7 @@ fun SettingsScreen(
                 value = selectedModelPath,
                 onValueChange = onModelPathChanged,
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Model File Name (in app files dir)") },
+                label = { Text("Model File Name (/sdcard/models/)") },
                 singleLine = true
             )
 
@@ -55,6 +66,44 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Reload Model")
+            }
+
+            HorizontalDivider()
+
+            Text(text = "Matrix Autonomous Agent", style = MaterialTheme.typography.titleMedium)
+
+            OutlinedTextField(
+                value = matrixHomeserver,
+                onValueChange = onMatrixHomeserverChanged,
+                label = { Text("Homeserver URL") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+
+            OutlinedTextField(
+                value = matrixToken,
+                onValueChange = onMatrixTokenChanged,
+                label = { Text("Access Token") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+
+            OutlinedTextField(
+                value = matrixRoomId,
+                onValueChange = onMatrixRoomIdChanged,
+                label = { Text("Control Room ID") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+
+            Button(
+                onClick = onToggleMatrixAgent,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isMatrixConnected) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                ),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(if (isMatrixConnected) "Disconnect Matrix Agent" else "Connect Matrix Agent")
             }
 
             HorizontalDivider()
