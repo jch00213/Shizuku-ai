@@ -62,22 +62,47 @@ fun AppHost() {
     var isProcessing by remember { mutableStateOf(false) }
     var isModelReady by remember { mutableStateOf(false) }
     var liteRtEngine by remember { mutableStateOf<LiteRtEngine?>(null) }
-    var currentModelFileName by remember { mutableStateOf("gemma-3n-E2B-it-int4.bin") }
+    var currentModelFileName by remember { mutableStateOf("gemma2-2b-it-int8-web.task.bin") }
 
     fun resolveModelFile(fileName: String): File {
-        val customDir = File(Environment.getExternalStorageDirectory(), "models")
-        if (!customDir.exists()) {
-            customDir.mkdirs()
+        val cleanName = fileName.trim()
+
+        // 1. Explicitly candidate /sdcard/models along with secondary mount paths
+        val candidateDirs = listOf(
+            File("/sdcard/models"),
+            File("/storage/emulated/0/models"),
+            File("/storage/self/primary/models"),
+            File(Environment.getExternalStorageDirectory(), "models")
+        )
+
+        for (dir in candidateDirs) {
+            if (!dir.exists()) {
+                try { dir.mkdirs() } catch (_: Exception) {}
+            }
+
+            // Direct file check
+            val directFile = File(dir, cleanName)
+            if (directFile.exists() && directFile.isFile) {
+                return directFile
+            }
+
+            // Case-insensitive file check in the folder
+            val caseMatch = dir.listFiles()?.firstOrNull { 
+                it.isFile && it.name.equals(cleanName, ignoreCase = true) 
+            }
+            if (caseMatch != null) {
+                return caseMatch
+            }
         }
 
-        val primaryFile = File(customDir, fileName)
-        val fallbackFile = File(context.getExternalFilesDir(null), fileName)
-
-        return when {
-            primaryFile.exists() -> primaryFile
-            fallbackFile.exists() -> fallbackFile
-            else -> primaryFile
+        // 2. App-specific internal storage fallback (/sdcard/Android/data/com.jeremy.shizukuai/files/)
+        val appSpecificFile = File(context.getExternalFilesDir(null), cleanName)
+        if (appSpecificFile.exists() && appSpecificFile.isFile) {
+            return appSpecificFile
         }
+
+        // Default primary return point targeting /sdcard/models/
+        return File("/sdcard/models", cleanName)
     }
 
     fun loadModel(fileName: String) {
