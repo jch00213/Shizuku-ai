@@ -16,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.jeremy.shizukuai.data.DownloadStatus
 import com.jeremy.shizukuai.data.ModelDownloader
@@ -37,6 +38,7 @@ fun HuggingFaceScreen(
 ) {
     val context = LocalContext.current
     var customUrl by remember { mutableStateOf("") }
+    var hfToken by remember { mutableStateOf("") }
     val downloadStatus by ModelDownloader.downloadStatus.collectAsState()
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
@@ -47,7 +49,7 @@ fun HuggingFaceScreen(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
-        ModelDownloadService.start(context, url, fileName)
+        ModelDownloadService.start(context, url, fileName, hfToken.ifBlank { null })
     }
 
     val presetModels = remember {
@@ -101,6 +103,20 @@ fun HuggingFaceScreen(
                 .padding(innerPadding)
                 .padding(16.dp)
         ) {
+            Text(text = "Authentication Token", style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(4.dp))
+            OutlinedTextField(
+                value = hfToken,
+                onValueChange = { hfToken = it },
+                placeholder = { Text("hf_xxxxxxxx (User Access Token)") },
+                visualTransformation = PasswordVisualTransformation(),
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                enabled = downloadStatus !is DownloadStatus.Downloading
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             Text(text = "Download Model Direct URL", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
 
