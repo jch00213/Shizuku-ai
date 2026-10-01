@@ -1,4 +1,4 @@
-package com.jeremy.shizukuai.ui
+package com.jeremy.shizukuai
 
 import android.Manifest
 import android.os.Build
@@ -18,9 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import com.jeremy.shizukuai.data.DownloadStatus
-import com.jeremy.shizukuai.data.ModelDownloader
-import com.jeremy.shizukuai.service.ModelDownloadService
+import java.io.File
 
 data class ModelItem(
     val name: String,
@@ -39,7 +37,7 @@ fun HuggingFaceScreen(
     val context = LocalContext.current
     var customUrl by remember { mutableStateOf("") }
     var hfToken by remember { mutableStateOf("") }
-    val downloadStatus by ModelDownloader.downloadStatus.collectAsState()
+    val downloadState by ModelDownloadService.downloadState.collectAsState()
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -49,7 +47,8 @@ fun HuggingFaceScreen(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
-        ModelDownloadService.start(context, url, fileName, hfToken.ifBlank { null })
+        val targetPath = File(context.getExternalFilesDir(null), fileName).absolutePath
+        ModelDownloadService.start(context, url, targetPath, hfToken.ifBlank { null })
     }
 
     val presetModels = remember {
@@ -78,9 +77,9 @@ fun HuggingFaceScreen(
         )
     }
 
-    LaunchedEffect(downloadStatus) {
-        if (downloadStatus is DownloadStatus.Success) {
-            val file = (downloadStatus as DownloadStatus.Success).file
+    LaunchedEffect(downloadState) {
+        if (downloadState is DownloadState.Completed) {
+            val file = (downloadState as DownloadState.Completed).file
             onModelDownloaded(file.name)
         }
     }
@@ -112,7 +111,7 @@ fun HuggingFaceScreen(
                 visualTransformation = PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                enabled = downloadStatus !is DownloadStatus.Downloading
+                enabled = downloadState !is DownloadState.Downloading
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -130,7 +129,7 @@ fun HuggingFaceScreen(
                     placeholder = { Text("Direct .bin download URL") },
                     modifier = Modifier.weight(1f),
                     singleLine = true,
-                    enabled = downloadStatus !is DownloadStatus.Downloading
+                    enabled = downloadState !is DownloadState.Downloading
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Button(
@@ -140,14 +139,14 @@ fun HuggingFaceScreen(
                             triggerDownload(customUrl, fileName)
                         }
                     },
-                    enabled = customUrl.isNotBlank() && downloadStatus !is DownloadStatus.Downloading
+                    enabled = customUrl.isNotBlank() && downloadState !is DownloadState.Downloading
                 ) {
                     Text("Fetch")
                 }
             }
 
-            when (val status = downloadStatus) {
-                is DownloadStatus.Downloading -> {
+            when (val state = downloadState) {
+                is DownloadState.Downloading -> {
                     Spacer(modifier = Modifier.height(16.dp))
                     Card(
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -172,7 +171,7 @@ fun HuggingFaceScreen(
                             }
                             Spacer(modifier = Modifier.height(8.dp))
                             LinearProgressIndicator(
-                                progress = { status.progress },
+                                progress = { state.progress / 100f },
                                 modifier = Modifier.fillMaxWidth()
                             )
                             Spacer(modifier = Modifier.height(6.dp))
@@ -180,37 +179,37 @@ fun HuggingFaceScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                val currentMb = status.downloadedBytes / (1024 * 1024)
-                                val totalMb = status.totalBytes / (1024 * 1024)
+                                val currentMb = state.bytesDownloaded / (1024 * 1024)
+                                val totalMb = state.totalBytes / (1024 * 1024)
                                 Text(
-                                    text = if (status.totalBytes > 0) "$currentMb MB / $totalMb MB" else "$currentMb MB downloaded",
+                                    text = if (state.totalBytes > 0) "$currentMb MB / $totalMb MB" else "$currentMb MB downloaded",
                                     style = MaterialTheme.typography.bodySmall
                                 )
                                 Text(
-                                    text = "${(status.progress * 100).toInt()}%",
+                                    text = "${state.progress}%",
                                     style = MaterialTheme.typography.bodySmall
                                 )
                             }
                         }
                     }
                 }
-                is DownloadStatus.Success -> {
+                is DownloadState.Completed -> {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Successfully downloaded & activated ${status.file.name}",
+                        text = "Successfully downloaded & activated ${state.file.name}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
-                is DownloadStatus.Error -> {
+                is DownloadState.Error -> {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Error: ${status.message}",
+                        text = "Error: ${state.message}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error
                     )
                 }
-                DownloadStatus.Canceled -> {
+                DownloadState.Canceled -> {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = "Download canceled.",
@@ -218,7 +217,7 @@ fun HuggingFaceScreen(
                         color = MaterialTheme.colorScheme.outline
                     )
                 }
-                DownloadStatus.Idle -> {}
+                DownloadState.Idle -> {}
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -246,7 +245,7 @@ fun HuggingFaceScreen(
                             }
                             IconButton(
                                 onClick = { triggerDownload(model.downloadUrl, model.fileName) },
-                                enabled = downloadStatus !is DownloadStatus.Downloading
+                                enabled = downloadState !is DownloadState.Downloading
                             ) {
                                 Icon(Icons.Default.Download, contentDescription = "Download")
                             }
