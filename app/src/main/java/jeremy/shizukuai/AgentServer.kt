@@ -1,14 +1,18 @@
 package com.jeremy.shizukuai
 
 import android.content.Context
-import io.ktor.serialization.gson.*
-import io.ktor.server.application.*
-import io.ktor.server.engine.*
-import io.ktor.server.cio.*
-import io.ktor.server.plugins.contentnegotiation.*
-import io.ktor.server.request.*
-import io.ktor.server.response.*
-import io.ktor.server.routing.*
+import io.ktor.serialization.gson.gson
+import io.ktor.server.application.call
+import io.ktor.server.application.install
+import io.ktor.server.cio.CIO
+import io.ktor.server.cio.CIOApplicationEngine
+import io.ktor.server.engine.embeddedServer
+import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.request.receive
+import io.ktor.server.response.respond
+import io.ktor.server.routing.get
+import io.ktor.server.routing.post
+import io.ktor.server.routing.routing
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -28,13 +32,11 @@ class AgentServer(private val context: Context, private val engineProvider: () -
             }
 
             routing {
-                // Health Check Endpoint
                 get("/status") {
                     val isReady = engineProvider() != null
                     call.respond(mapOf("status" to if (isReady) "ready" else "model_not_loaded"))
                 }
 
-                // AI Command Generation Endpoint
                 post("/generate") {
                     val request = call.receive<InferenceRequest>()
                     val engine = engineProvider()
