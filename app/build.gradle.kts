@@ -93,4 +93,7 @@ dependencies {
     implementation(libs.shizuku.provider)
 
     debugImplementation(libs.androidx.ui.tooling)
+    // Navigation & Icons required for CloudDownload, Download, NavHost, composable
+    implementation("androidx.navigation:navigation-compose:2.8.8")
+    implementation("androidx.compose.material:material-icons-extended:1.7.8")
 }
