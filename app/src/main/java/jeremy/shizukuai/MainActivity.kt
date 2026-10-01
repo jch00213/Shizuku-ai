@@ -64,6 +64,10 @@ fun AppHost() {
     var liteRtEngine by remember { mutableStateOf<LiteRtEngine?>(null) }
     var currentModelFileName by remember { mutableStateOf("qwen2.5-1.5b-instruct-gpu-int4.bin") }
 
+    // HTTP Server State (0.0.0.0:8080)
+    var agentServer by remember { mutableStateOf<AgentServer?>(null) }
+    var isServerRunning by remember { mutableStateOf(false) }
+
     // Matrix Agent State
     var matrixHomeserver by remember { mutableStateOf("https://matrix.org") }
     var matrixToken by remember { mutableStateOf("") }
@@ -146,6 +150,21 @@ fun AppHost() {
         }
     }
 
+    fun toggleAgentServer() {
+        if (isServerRunning) {
+            agentServer?.stop()
+            agentServer = null
+            isServerRunning = false
+            messages.add(ChatMessage("[HTTP Server]: Stopped.", MessageType.SYSTEM))
+        } else {
+            val server = AgentServer(context) { liteRtEngine }
+            server.start(8080)
+            agentServer = server
+            isServerRunning = true
+            messages.add(ChatMessage("[HTTP Server]: Listening on 0.0.0.0:8080", MessageType.SYSTEM))
+        }
+    }
+
     fun toggleMatrixAgent() {
         if (isMatrixConnected) {
             matrixJob?.cancel()
@@ -203,6 +222,8 @@ fun AppHost() {
     LaunchedEffect(Unit) {
         messages.add(ChatMessage("// Shizuku AI Dashboard Initialized", MessageType.SYSTEM))
         loadModel(currentModelFileName)
+        // Auto-start the HTTP server on launch
+        toggleAgentServer()
     }
 
     NavHost(navController = navController, startDestination = Screen.Chat.route) {
@@ -274,7 +295,7 @@ fun AppHost() {
                 onReloadModel = { loadModel(currentModelFileName) },
                 isShizukuConnected = remoteService != null || isGranted,
                 onRequestShizukuPermission = { ShizukuManager.checkPermission() },
-                // Matrix Bridge parameters explicitly typed
+                // Matrix Bridge parameters
                 matrixHomeserver = matrixHomeserver,
                 onMatrixHomeserverChanged = { newServer -> matrixHomeserver = newServer },
                 matrixToken = matrixToken,
