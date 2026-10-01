@@ -1,4 +1,3 @@
-// SettingsScreen.kt
 package com.jeremy.shizukuai.ui
 
 import androidx.compose.foundation.layout.*
@@ -15,9 +14,12 @@ import androidx.compose.ui.unit.dp
 fun SettingsScreen(
     onBack: () -> Unit,
     selectedModelPath: String,
-    onModelPathChanged: (String) -> Unit
+    onModelPathChanged: (String) -> Unit,
+    onReloadModel: () -> Unit,
+    isShizukuConnected: Boolean,
+    onRequestShizukuPermission: () -> Unit
 ) {
-    var autoExecuteShell by remember { mutableStateOf(false) }
+    var autoExecute by remember { mutableStateOf(true) }
 
     Scaffold(
         topBar = {
@@ -35,21 +37,29 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(16.dp)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text(text = "Active Model File", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(4.dp))
+            Text(text = "LiteRT Engine Configuration", style = MaterialTheme.typography.titleMedium)
+
             OutlinedTextField(
                 value = selectedModelPath,
                 onValueChange = onModelPathChanged,
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Local .bin Path") }
+                label = { Text("Model File Name (in app files dir)") },
+                singleLine = true
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Button(
+                onClick = onReloadModel,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Reload Model")
+            }
 
-            Text(text = "Execution Environment", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(8.dp))
+            HorizontalDivider()
+
+            Text(text = "Shizuku Runtime", style = MaterialTheme.typography.titleMedium)
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -57,16 +67,36 @@ fun SettingsScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(text = "Auto-Execute Shizuku Commands", style = MaterialTheme.typography.bodyLarge)
+                    Text(text = "Shizuku Connection Status", style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        text = "Automatically execute generated shell commands via Shizuku without prompting.",
+                        text = if (isShizukuConnected) "Active (UID 2000)" else "Disconnected / Permission Needed",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (!isShizukuConnected) {
+                    Button(onClick = onRequestShizukuPermission) {
+                        Text("Connect")
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = "Auto-Execute Extracted Shell Commands", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        text = "Execute shell commands via Shizuku automatically after LLM inference.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Switch(
-                    checked = autoExecuteShell,
-                    onCheckedChange = { autoExecuteShell = it }
+                    checked = autoExecute,
+                    onCheckedChange = { autoExecute = it }
                 )
             }
         }
