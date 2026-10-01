@@ -1,5 +1,6 @@
 package com.jeremy.shizukuai.service
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -111,7 +112,7 @@ class ModelDownloadService : Service() {
                     var lastNotifTime = 0L
 
                     while (input.read(buffer).also { bytesRead = it } != -1) {
-                        ensureActive()
+                        currentCoroutineContext().ensureActive()
 
                         output.write(buffer, 0, bytesRead)
                         downloadedBytes += bytesRead
@@ -187,7 +188,7 @@ class ModelDownloadService : Service() {
         maxProgress: Int,
         indeterminate: Boolean,
         contentText: String = ""
-    ): android.app.Notification {
+    ): Notification {
         val cancelIntent = Intent(this, ModelDownloadService::class.java).apply {
             action = ACTION_CANCEL_DOWNLOAD
         }
