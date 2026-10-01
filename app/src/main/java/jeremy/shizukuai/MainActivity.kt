@@ -174,7 +174,7 @@ fun AppHost() {
                 val service = remoteService
 
                 if (engine != null && isModelReady) {
-                    val extractedCmd = engine.generateCommand(prompt)
+                    val extractedCmd = engine.generateCommand(context, prompt)
 
                     withContext(Dispatchers.Main) {
                         messages.add(ChatMessage("Extracted Command:\n$extractedCmd", MessageType.AI))
@@ -227,7 +227,7 @@ fun AppHost() {
                                 messages.add(ChatMessage("[LiteRT Thinking...]", MessageType.SYSTEM))
                             }
 
-                            val extractedCmd = engine.generateCommand(prompt)
+                            val extractedCmd = engine.generateCommand(context, prompt)
 
                             withContext(Dispatchers.Main) {
                                 messages.add(ChatMessage("Extracted Command:\n$extractedCmd", MessageType.AI))
