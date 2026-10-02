@@ -50,7 +50,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        // Ensure background processes stop when the activity is destroyed
         activeBridge?.stop()
         activeServer?.stop()
         ShizukuManager.unbindUserService()
@@ -194,45 +193,49 @@ fun AppHost(
 
             tokenManager.saveMatrixCredentials(matrixHomeserver, matrixToken, matrixRoomId)
 
-            val bridge = MatrixAgentBridge(matrixHomeserver, matrixToken, matrixRoomId)
+            val bridge = MatrixAgentBridge(scope)
             matrixBridge = bridge
             onBridgeCreated(bridge)
             isMatrixConnected = true
 
             messages.add(ChatMessage("[Matrix Agent]: Starting sync loop on $matrixHomeserver...", MessageType.SYSTEM))
 
-            // Start listening loop directly on the bridge instance
-            bridge.startListening { sender, prompt ->
-                // UI updates moved to Main thread
-                withContext(Dispatchers.Main) {
-                    messages.add(ChatMessage("[Matrix @ $sender]: $prompt", MessageType.USER))
-                }
-
-                val engine = liteRtEngine
-                val service = remoteService
-
-                if (engine != null && isModelReady) {
-                    val extractedCmd = engine.generateCommand(context, prompt)
-
+            scope.launch(Dispatchers.IO) {
+                bridge.startListening(
+                    homeserver = matrixHomeserver,
+                    accessToken = matrixToken,
+                    roomId = matrixRoomId
+                ) { sender, prompt ->
                     withContext(Dispatchers.Main) {
-                        messages.add(ChatMessage("Extracted Command:\n$extractedCmd", MessageType.AI))
+                        messages.add(ChatMessage("[Matrix @ $sender]: $prompt", MessageType.USER))
                     }
 
-                    val output = service?.execCommand(extractedCmd) ?: "Shizuku service not connected"
+                    val engine = liteRtEngine
+                    val service = remoteService
 
-                    withContext(Dispatchers.Main) {
-                        messages.add(ChatMessage(output, MessageType.COMMAND_OUTPUT))
+                    if (engine != null && isModelReady) {
+                        val extractedCmd = engine.generateCommand(context, prompt)
+
+                        withContext(Dispatchers.Main) {
+                            messages.add(ChatMessage("Extracted Command:\n$extractedCmd", MessageType.AI))
+                        }
+
+                        val output = service?.execCommand(extractedCmd) ?: "Shizuku service not connected"
+
+                        withContext(Dispatchers.Main) {
+                            messages.add(ChatMessage(output, MessageType.COMMAND_OUTPUT))
+                        }
+
+                        "🤖 [OpenClaw Agent Execution]\nCommand:\n$extractedCmd\n\nOutput:\n$output"
+                    } else {
+                        val output = service?.execCommand(prompt) ?: "Shizuku service not connected"
+
+                        withContext(Dispatchers.Main) {
+                            messages.add(ChatMessage(output, MessageType.COMMAND_OUTPUT))
+                        }
+
+                        "⚠️ [Raw Shell Fallback (Model Not Loaded)]\nOutput:\n$output"
                     }
-
-                    "🤖 [OpenClaw Agent Execution]\nCommand:\n$extractedCmd\n\nOutput:\n$output"
-                } else {
-                    val output = service?.execCommand(prompt) ?: "Shizuku service not connected"
-
-                    withContext(Dispatchers.Main) {
-                        messages.add(ChatMessage(output, MessageType.COMMAND_OUTPUT))
-                    }
-
-                    "⚠️ [Raw Shell Fallback (Model Not Loaded)]\nOutput:\n$output"
                 }
             }
         }
