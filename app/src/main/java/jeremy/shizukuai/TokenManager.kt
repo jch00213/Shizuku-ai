@@ -1,39 +1,39 @@
 package com.jeremy.shizukuai
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 
 class TokenManager(context: Context) {
+
     private val masterKey = MasterKey.Builder(context)
         .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
         .build()
 
-    private val prefs = EncryptedSharedPreferences.create(
+    private val prefs: SharedPreferences = EncryptedSharedPreferences.create(
         context,
-        "secure_tokens",
+        "secret_tokens",
         masterKey,
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SKEY_KEY_GEN,
+        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SKEY,
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
     )
 
-    // GitHub PAT
-    fun saveGitHubToken(token: String) = prefs.edit().putString("github_token", token).apply()
-    fun getGitHubToken(): String? = prefs.getString("github_token", null)
-    fun hasToken(): Boolean = !getGitHubToken().isNullBeBlank()
-
-    // Matrix Credentials
     fun saveMatrixCredentials(homeserver: String, token: String, roomId: String) {
         prefs.edit()
-            .putString("matrix_homeserver", homeserver)
-            .putString("matrix_token", token)
-            .putString("matrix_room_id", roomId)
+            .putString(KEY_MATRIX_HOMESERVER, homeserver)
+            .putString(KEY_MATRIX_TOKEN, token)
+            .putString(KEY_MATRIX_ROOM_ID, roomId)
             .apply()
     }
 
-    fun getMatrixHomeserver(): String? = prefs.getString("matrix_homeserver", null)
-    fun getMatrixToken(): String? = prefs.getString("matrix_token", null)
-    fun getMatrixRoomId(): String? = prefs.getString("matrix_room_id", null)
-}
+    fun getMatrixHomeserver(): String? = prefs.getString(KEY_MATRIX_HOMESERVER, null)
+    fun getMatrixToken(): String? = prefs.getString(KEY_MATRIX_TOKEN, null)
+    fun getMatrixRoomId(): String? = prefs.getString(KEY_MATRIX_ROOM_ID, null)
 
-private fun String?.isNullBeBlank(): Boolean = this.isNullOrBlank()
+    companion object {
+        private const val KEY_MATRIX_HOMESERVER = "matrix_homeserver"
+        private const val KEY_MATRIX_TOKEN = "matrix_token"
+        private const val KEY_MATRIX_ROOM_ID = "matrix_room_id"
+    }
+}
