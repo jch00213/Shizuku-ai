@@ -1,48 +1,45 @@
 package com.jeremy.shizukuai
 
 import android.content.Context
-import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 
 class TokenManager(context: Context) {
-
     private val masterKey = MasterKey.Builder(context)
         .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
         .build()
 
-    private val prefs: SharedPreferences = EncryptedSharedPreferences.create(
+    private val prefs = EncryptedSharedPreferences.create(
         context,
-        "secret_tokens",
+        "secure_tokens",
         masterKey,
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SKEY,
+        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SKEY_KEY_GEN,
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
     )
 
-    // --- Matrix Credentials ---
+    // GitHub PAT
+    fun saveGitHubToken(token: String) {
+        prefs.edit().putString("github_token", token).apply()
+    }
+
+    fun getGitHubToken(): String? {
+        return prefs.getString("github_token", null)
+    }
+
+    fun hasToken(): Boolean {
+        return !getGitHubToken().isNullOrBlank()
+    }
+
+    // Matrix Credentials
     fun saveMatrixCredentials(homeserver: String, token: String, roomId: String) {
         prefs.edit()
-            .putString(KEY_MATRIX_HOMESERVER, homeserver)
-            .putString(KEY_MATRIX_TOKEN, token)
-            .putString(KEY_MATRIX_ROOM_ID, roomId)
+            .putString("matrix_homeserver", homeserver)
+            .putString("matrix_token", token)
+            .putString("matrix_room_id", roomId)
             .apply()
     }
 
-    fun getMatrixHomeserver(): String? = prefs.getString(KEY_MATRIX_HOMESERVER, null)
-    fun getMatrixToken(): String? = prefs.getString(KEY_MATRIX_TOKEN, null)
-    fun getMatrixRoomId(): String? = prefs.getString(KEY_MATRIX_ROOM_ID, null)
-
-    // --- GitHub Credentials ---
-    fun saveGithubToken(token: String) {
-        prefs.edit().putString(KEY_GITHUB_TOKEN, token).apply()
-    }
-
-    fun getGithubToken(): String? = prefs.getString(KEY_GITHUB_TOKEN, null)
-
-    companion object {
-        private const val KEY_MATRIX_HOMESERVER = "matrix_homeserver"
-        private const val KEY_MATRIX_TOKEN = "matrix_token"
-        private const val KEY_MATRIX_ROOM_ID = "matrix_room_id"
-        private const val KEY_GITHUB_TOKEN = "github_token"
-    }
+    fun getMatrixHomeserver(): String? = prefs.getString("matrix_homeserver", null)
+    fun getMatrixToken(): String? = prefs.getString("matrix_token", null)
+    fun getMatrixRoomId(): String? = prefs.getString("matrix_room_id", null)
 }
