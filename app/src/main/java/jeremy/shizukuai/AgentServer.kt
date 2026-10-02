@@ -18,6 +18,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 data class TokenSavePayload(val token: String)
+data class MatrixConfigPayload(
+    val homeserver: String,
+    val token: String,
+    val roomId: String
+)
 data class PrReviewPayload(val owner: String, val repo: String, val prNumber: Int)
 data class IssueCreatePayload(val owner: String, val repo: String, val title: String, val body: String, val labels: List<String> = emptyList())
 data class WorkflowDispatchPayload(val owner: String, val repo: String, val workflowId: String, val ref: String = "main")
@@ -43,11 +48,12 @@ class AgentServer(
                     val isReady = engineProvider() != null
                     call.respond(mapOf(
                         "status" to if (isReady) "ready" else "model_not_loaded",
-                        "github_token_configured" to tokenManager.hasToken()
+                        "github_token_configured" to tokenManager.hasToken(),
+                        "matrix_configured" to (tokenManager.getMatrixToken() != null && tokenManager.getMatrixRoomId() != null)
                     ))
                 }
 
-                // Endpoint to set/update PAT securely
+                // Endpoint to set/update GitHub PAT securely
                 post("/github/token") {
                     val payload = call.receive<TokenSavePayload>()
                     if (payload.token.isBlank()) {
@@ -55,7 +61,19 @@ class AgentServer(
                         return@post
                     }
                     tokenManager.saveGitHubToken(payload.token)
-                    call.respond(mapOf("status" to "Token saved successfully"))
+                    call.respond(mapOf("status" to "GitHub token saved successfully"))
+                }
+
+                // Endpoint to set/update Matrix Credentials securely
+                post("/matrix/config") {
+                    val payload = call.receive<MatrixConfigPayload>()
+                    if (payload.token.isBlank() || payload.roomId.isBlank()) {
+                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Token and Room ID cannot be blank"))
+                        return@post
+                    }
+
+                    tokenManager.saveMatrixCredentials(payload.homeserver, payload.token, payload.roomId)
+                    call.respond(mapOf("status" to "Matrix configuration saved successfully"))
                 }
 
                 // Automated PR Review using LiteRtEngine
