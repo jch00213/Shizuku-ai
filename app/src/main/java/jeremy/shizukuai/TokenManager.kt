@@ -2,6 +2,8 @@ package com.jeremy.shizukuai
 
 import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.EncryptedSharedPreferences.PrefKeyEncryptionScheme
+import androidx.security.crypto.EncryptedSharedPreferences.PrefValueEncryptionScheme
 import androidx.security.crypto.MasterKey
 
 class TokenManager(context: Context) {
@@ -13,8 +15,8 @@ class TokenManager(context: Context) {
         context,
         "secure_tokens",
         masterKey,
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SKEY,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        PrefKeyEncryptionScheme.AES256_SKEY,
+        PrefValueEncryptionScheme.AES256_GCM
     )
 
     // GitHub PAT
