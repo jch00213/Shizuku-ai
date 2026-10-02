@@ -189,36 +189,38 @@ fun AppHost() {
 
             messages.add(ChatMessage("[Matrix Agent]: Starting sync loop on $matrixHomeserver...", MessageType.SYSTEM))
 
-            matrixJob = bridge.startListening { sender, prompt ->
-                withContext(Dispatchers.Main) {
-                    messages.add(ChatMessage("[Matrix @ $sender]: $prompt", MessageType.USER))
-                }
-
-                val engine = liteRtEngine
-                val service = remoteService
-
-                if (engine != null && isModelReady) {
-                    val extractedCmd = engine.generateCommand(context, prompt)
-
-                    withContext(Dispatchers.Main) {
-                        messages.add(ChatMessage("Extracted Command:\n$extractedCmd", MessageType.AI))
+            matrixJob = scope.launch(Dispatchers.IO) {
+                bridge.startListening { sender, prompt ->
+                    scope.launch(Dispatchers.Main) {
+                        messages.add(ChatMessage("[Matrix @ $sender]: $prompt", MessageType.USER))
                     }
 
-                    val output = service?.execCommand(extractedCmd) ?: "Shizuku service not connected"
+                    val engine = liteRtEngine
+                    val service = remoteService
 
-                    withContext(Dispatchers.Main) {
-                        messages.add(ChatMessage(output, MessageType.COMMAND_OUTPUT))
+                    if (engine != null && isModelReady) {
+                        val extractedCmd = engine.generateCommand(context, prompt)
+
+                        scope.launch(Dispatchers.Main) {
+                            messages.add(ChatMessage("Extracted Command:\n$extractedCmd", MessageType.AI))
+                        }
+
+                        val output = service?.execCommand(extractedCmd) ?: "Shizuku service not connected"
+
+                        scope.launch(Dispatchers.Main) {
+                            messages.add(ChatMessage(output, MessageType.COMMAND_OUTPUT))
+                        }
+
+                        "🤖 [OpenClaw Agent Execution]\nCommand:\n$extractedCmd\n\nOutput:\n$output"
+                    } else {
+                        val output = service?.execCommand(prompt) ?: "Shizuku service not connected"
+                        
+                        scope.launch(Dispatchers.Main) {
+                            messages.add(ChatMessage(output, MessageType.COMMAND_OUTPUT))
+                        }
+
+                        "⚠️ [Raw Shell Fallback (Model Not Loaded)]\nOutput:\n$output"
                     }
-
-                    "🤖 [OpenClaw Agent Execution]\nCommand:\n$extractedCmd\n\nOutput:\n$output"
-                } else {
-                    val output = service?.execCommand(prompt) ?: "Shizuku service not connected"
-                    
-                    withContext(Dispatchers.Main) {
-                        messages.add(ChatMessage(output, MessageType.COMMAND_OUTPUT))
-                    }
-
-                    "⚠️ [Raw Shell Fallback (Model Not Loaded)]\nOutput:\n$output"
                 }
             }
         }
