@@ -1,4 +1,4 @@
-package com.jeremy.shizukuai
+package com.jeremy.shizukuai.ui
 
 import android.Manifest
 import android.os.Build
