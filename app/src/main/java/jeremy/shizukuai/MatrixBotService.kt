@@ -12,6 +12,7 @@ import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.Json
+import java.net.URLEncoder
 
 class MatrixBotService(
     private val context: Context,
@@ -64,10 +65,11 @@ class MatrixBotService(
 
                 if (response.status.isSuccess()) {
                     val syncData = response.body<MatrixSyncResponse>()
+                    val previousSince = sinceToken
                     sinceToken = syncData.nextBatch
 
-                    // Process timeline events only if this isn't the initial sync catchup
-                    if (sinceToken != null) {
+                    // Process timeline events only if this isn't the initial catchup sync
+                    if (previousSince != null) {
                         processSyncEvents(syncData)
                     }
                 }
@@ -88,7 +90,7 @@ class MatrixBotService(
                 if (event.type != "m.room.message" || event.sender == botUserId) continue
 
                 val messageBody = event.content?.body?.trim() ?: continue
-                if (messageBody.startsWith("!claw") || messageBody.startsWith("!exec") || messageBody.startsWith("!help")) {
+                if (messageBody.startsWith("!claw") || messageBody.startsWith("!exec") || messageBody.startsWith("!help") || messageBody == "!status") {
                     handleBotCommand(roomId, messageBody)
                 }
             }
@@ -137,7 +139,7 @@ class MatrixBotService(
 
     private suspend fun sendTextMessage(roomId: String, message: String): Boolean {
         return try {
-            val encodedRoomId = HttpStatusCode.encode(roomId)
+            val encodedRoomId = URLEncoder.encode(roomId, "UTF-8")
             val txnId = System.currentTimeMillis().toString()
             val response = client.put("$baseUrl/_matrix/client/v3/rooms/$encodedRoomId/send/m.room.message/$txnId") {
                 header(HttpHeaders.Authorization, "Bearer $accessToken")
