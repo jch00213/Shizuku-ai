@@ -13,20 +13,22 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 
-// Keep ui imports ONLY for files actually located inside the 'ui' package directory
 import com.jeremy.shizukuai.ui.ChatMessage
 import com.jeremy.shizukuai.ui.ChatScreen
+import com.jeremy.shizukuai.ui.HuggingFaceScreen
 import com.jeremy.shizukuai.ui.MessageType
 import com.jeremy.shizukuai.ui.Screen
 import com.jeremy.shizukuai.ui.SettingsScreen
 
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
 class MainActivity : ComponentActivity() {
+
+    private var activeBridge: MatrixAgentBridge? = null
+    private var activeServer: AgentServer? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -37,7 +39,10 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    AppHost()
+                    AppHost(
+                        onBridgeCreated = { activeBridge = it },
+                        onServerCreated = { activeServer = it }
+                    )
                 }
             }
         }
@@ -45,12 +50,18 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        // Ensure background processes stop when the activity is destroyed
+        activeBridge?.stop()
+        activeServer?.stop()
         ShizukuManager.unbindUserService()
     }
 }
 
 @Composable
-fun AppHost() {
+fun AppHost(
+    onBridgeCreated: (MatrixAgentBridge?) -> Unit = {},
+    onServerCreated: (AgentServer?) -> Unit = {}
+) {
     val context = LocalContext.current
     val navController = rememberNavController()
     val scope = rememberCoroutineScope()
@@ -70,13 +81,12 @@ fun AppHost() {
     var agentServer by remember { mutableStateOf<AgentServer?>(null) }
     var isServerRunning by remember { mutableStateOf(false) }
 
-    // Matrix Agent State (Initialized from TokenManager if available)
+    // Matrix Agent State
     var matrixHomeserver by remember { mutableStateOf(tokenManager.getMatrixHomeserver() ?: "http://100.79.108.115:8082") }
     var matrixToken by remember { mutableStateOf(tokenManager.getMatrixToken() ?: "") }
     var matrixRoomId by remember { mutableStateOf(tokenManager.getMatrixRoomId() ?: "") }
     var isMatrixConnected by remember { mutableStateOf(false) }
     var matrixBridge by remember { mutableStateOf<MatrixAgentBridge?>(null) }
-    var matrixJob by remember { mutableStateOf<Job?>(null) }
 
     fun resolveModelFile(fileName: String): File {
         val cleanName = fileName.trim()
@@ -156,12 +166,14 @@ fun AppHost() {
         if (isServerRunning) {
             agentServer?.stop()
             agentServer = null
+            onServerCreated(null)
             isServerRunning = false
             messages.add(ChatMessage("[HTTP Server]: Stopped.", MessageType.SYSTEM))
         } else {
             val server = AgentServer(context) { liteRtEngine }
             server.start(8080)
             agentServer = server
+            onServerCreated(server)
             isServerRunning = true
             messages.add(ChatMessage("[HTTP Server]: Listening on 0.0.0.0:8080", MessageType.SYSTEM))
         }
@@ -169,9 +181,9 @@ fun AppHost() {
 
     fun toggleMatrixAgent() {
         if (isMatrixConnected) {
-            matrixJob?.cancel()
             matrixBridge?.stop()
             matrixBridge = null
+            onBridgeCreated(null)
             isMatrixConnected = false
             messages.add(ChatMessage("[Matrix Agent]: Stopped.", MessageType.SYSTEM))
         } else {
@@ -180,47 +192,47 @@ fun AppHost() {
                 return
             }
 
-            // Persist the Matrix credentials safely
             tokenManager.saveMatrixCredentials(matrixHomeserver, matrixToken, matrixRoomId)
 
             val bridge = MatrixAgentBridge(matrixHomeserver, matrixToken, matrixRoomId)
             matrixBridge = bridge
+            onBridgeCreated(bridge)
             isMatrixConnected = true
 
             messages.add(ChatMessage("[Matrix Agent]: Starting sync loop on $matrixHomeserver...", MessageType.SYSTEM))
 
-            matrixJob = scope.launch(Dispatchers.IO) {
-                bridge.startListening { sender, prompt ->
-                    scope.launch(Dispatchers.Main) {
-                        messages.add(ChatMessage("[Matrix @ $sender]: $prompt", MessageType.USER))
+            // Start listening loop directly on the bridge instance
+            bridge.startListening { sender, prompt ->
+                // UI updates moved to Main thread
+                withContext(Dispatchers.Main) {
+                    messages.add(ChatMessage("[Matrix @ $sender]: $prompt", MessageType.USER))
+                }
+
+                val engine = liteRtEngine
+                val service = remoteService
+
+                if (engine != null && isModelReady) {
+                    val extractedCmd = engine.generateCommand(context, prompt)
+
+                    withContext(Dispatchers.Main) {
+                        messages.add(ChatMessage("Extracted Command:\n$extractedCmd", MessageType.AI))
                     }
 
-                    val engine = liteRtEngine
-                    val service = remoteService
+                    val output = service?.execCommand(extractedCmd) ?: "Shizuku service not connected"
 
-                    if (engine != null && isModelReady) {
-                        val extractedCmd = engine.generateCommand(context, prompt)
-
-                        scope.launch(Dispatchers.Main) {
-                            messages.add(ChatMessage("Extracted Command:\n$extractedCmd", MessageType.AI))
-                        }
-
-                        val output = service?.execCommand(extractedCmd) ?: "Shizuku service not connected"
-
-                        scope.launch(Dispatchers.Main) {
-                            messages.add(ChatMessage(output, MessageType.COMMAND_OUTPUT))
-                        }
-
-                        "🤖 [OpenClaw Agent Execution]\nCommand:\n$extractedCmd\n\nOutput:\n$output"
-                    } else {
-                        val output = service?.execCommand(prompt) ?: "Shizuku service not connected"
-                        
-                        scope.launch(Dispatchers.Main) {
-                            messages.add(ChatMessage(output, MessageType.COMMAND_OUTPUT))
-                        }
-
-                        "⚠️ [Raw Shell Fallback (Model Not Loaded)]\nOutput:\n$output"
+                    withContext(Dispatchers.Main) {
+                        messages.add(ChatMessage(output, MessageType.COMMAND_OUTPUT))
                     }
+
+                    "🤖 [OpenClaw Agent Execution]\nCommand:\n$extractedCmd\n\nOutput:\n$output"
+                } else {
+                    val output = service?.execCommand(prompt) ?: "Shizuku service not connected"
+
+                    withContext(Dispatchers.Main) {
+                        messages.add(ChatMessage(output, MessageType.COMMAND_OUTPUT))
+                    }
+
+                    "⚠️ [Raw Shell Fallback (Model Not Loaded)]\nOutput:\n$output"
                 }
             }
         }
@@ -230,10 +242,8 @@ fun AppHost() {
         messages.add(ChatMessage("// Shizuku AI Dashboard Initialized", MessageType.SYSTEM))
         loadModel(currentModelFileName)
         
-        // Auto-start the HTTP server on launch
         toggleAgentServer()
 
-        // Auto-connect Matrix Agent on launch if token and room ID exist
         if (matrixToken.isNotBlank() && matrixRoomId.isNotBlank()) {
             toggleMatrixAgent()
         }
@@ -308,7 +318,6 @@ fun AppHost() {
                 onReloadModel = { loadModel(currentModelFileName) },
                 isShizukuConnected = remoteService != null || isGranted,
                 onRequestShizukuPermission = { ShizukuManager.checkPermission() },
-                // Matrix Bridge parameters
                 matrixHomeserver = matrixHomeserver,
                 onMatrixHomeserverChanged = { newServer -> 
                     matrixHomeserver = newServer 
