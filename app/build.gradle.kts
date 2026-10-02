@@ -112,4 +112,9 @@ dependencies {
     // Navigation & Icons required for CloudDownload, Download, NavHost, composable
     implementation("androidx.navigation:navigation-compose:2.8.8")
     implementation("androidx.compose.material:material-icons-extended:1.7.8")
+    dependencies {
+    // Add to your dependencies block if not already present
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+}
+
 }
