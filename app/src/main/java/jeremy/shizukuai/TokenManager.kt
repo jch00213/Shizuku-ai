@@ -13,7 +13,7 @@ class TokenManager(context: Context) {
         context,
         "secure_tokens",
         masterKey,
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SKEY_KEY_GEN_128_GCM,
+        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SKEY,
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
     )
 
