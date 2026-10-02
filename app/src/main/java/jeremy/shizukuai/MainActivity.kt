@@ -206,7 +206,7 @@ fun AppHost(
                     accessToken = matrixToken,
                     roomId = matrixRoomId
                 ) { sender, prompt ->
-                    withContext(Dispatchers.Main) {
+                    scope.launch(Dispatchers.Main) {
                         messages.add(ChatMessage("[Matrix @ $sender]: $prompt", MessageType.USER))
                     }
 
@@ -216,13 +216,13 @@ fun AppHost(
                     if (engine != null && isModelReady) {
                         val extractedCmd = engine.generateCommand(context, prompt)
 
-                        withContext(Dispatchers.Main) {
+                        scope.launch(Dispatchers.Main) {
                             messages.add(ChatMessage("Extracted Command:\n$extractedCmd", MessageType.AI))
                         }
 
                         val output = service?.execCommand(extractedCmd) ?: "Shizuku service not connected"
 
-                        withContext(Dispatchers.Main) {
+                        scope.launch(Dispatchers.Main) {
                             messages.add(ChatMessage(output, MessageType.COMMAND_OUTPUT))
                         }
 
@@ -230,7 +230,7 @@ fun AppHost(
                     } else {
                         val output = service?.execCommand(prompt) ?: "Shizuku service not connected"
 
-                        withContext(Dispatchers.Main) {
+                        scope.launch(Dispatchers.Main) {
                             messages.add(ChatMessage(output, MessageType.COMMAND_OUTPUT))
                         }
 
