@@ -55,6 +55,8 @@ fun AppHost() {
     val navController = rememberNavController()
     val scope = rememberCoroutineScope()
 
+    val tokenManager = remember { TokenManager(context) }
+
     val remoteService by ShizukuManager.remoteService.collectAsState()
     val isGranted by ShizukuManager.isPermissionGranted.collectAsState()
 
@@ -68,10 +70,10 @@ fun AppHost() {
     var agentServer by remember { mutableStateOf<AgentServer?>(null) }
     var isServerRunning by remember { mutableStateOf(false) }
 
-    // Matrix Agent State
-    var matrixHomeserver by remember { mutableStateOf("https://matrix.org") }
-    var matrixToken by remember { mutableStateOf("") }
-    var matrixRoomId by remember { mutableStateOf("") }
+    // Matrix Agent State (Initialized from TokenManager if available)
+    var matrixHomeserver by remember { mutableStateOf(tokenManager.getMatrixHomeserver() ?: "http://100.79.108.115:8082") }
+    var matrixToken by remember { mutableStateOf(tokenManager.getMatrixToken() ?: "") }
+    var matrixRoomId by remember { mutableStateOf(tokenManager.getMatrixRoomId() ?: "") }
     var isMatrixConnected by remember { mutableStateOf(false) }
     var matrixBridge by remember { mutableStateOf<MatrixAgentBridge?>(null) }
     var matrixJob by remember { mutableStateOf<Job?>(null) }
@@ -178,6 +180,9 @@ fun AppHost() {
                 return
             }
 
+            // Persist the Matrix credentials safely
+            tokenManager.saveMatrixCredentials(matrixHomeserver, matrixToken, matrixRoomId)
+
             val bridge = MatrixAgentBridge(matrixHomeserver, matrixToken, matrixRoomId)
             matrixBridge = bridge
             isMatrixConnected = true
@@ -222,8 +227,14 @@ fun AppHost() {
     LaunchedEffect(Unit) {
         messages.add(ChatMessage("// Shizuku AI Dashboard Initialized", MessageType.SYSTEM))
         loadModel(currentModelFileName)
+        
         // Auto-start the HTTP server on launch
         toggleAgentServer()
+
+        // Auto-connect Matrix Agent on launch if token and room ID exist
+        if (matrixToken.isNotBlank() && matrixRoomId.isNotBlank()) {
+            toggleMatrixAgent()
+        }
     }
 
     NavHost(navController = navController, startDestination = Screen.Chat.route) {
@@ -297,11 +308,20 @@ fun AppHost() {
                 onRequestShizukuPermission = { ShizukuManager.checkPermission() },
                 // Matrix Bridge parameters
                 matrixHomeserver = matrixHomeserver,
-                onMatrixHomeserverChanged = { newServer -> matrixHomeserver = newServer },
+                onMatrixHomeserverChanged = { newServer -> 
+                    matrixHomeserver = newServer 
+                    tokenManager.saveMatrixCredentials(newServer, matrixToken, matrixRoomId)
+                },
                 matrixToken = matrixToken,
-                onMatrixTokenChanged = { newToken -> matrixToken = newToken },
+                onMatrixTokenChanged = { newToken -> 
+                    matrixToken = newToken
+                    tokenManager.saveMatrixCredentials(matrixHomeserver, newToken, matrixRoomId)
+                },
                 matrixRoomId = matrixRoomId,
-                onMatrixRoomIdChanged = { newRoom -> matrixRoomId = newRoom },
+                onMatrixRoomIdChanged = { newRoom -> 
+                    matrixRoomId = newRoom
+                    tokenManager.saveMatrixCredentials(matrixHomeserver, matrixToken, newRoom)
+                },
                 isMatrixConnected = isMatrixConnected,
                 onToggleMatrixAgent = { toggleMatrixAgent() }
             )
